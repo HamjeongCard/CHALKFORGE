@@ -1,0 +1,16 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="17.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="C:\Users\Hamje\OneDrive\Desktop\프로그래밍\3학년 2학기\다이렉트X\중간고사\CHALKFORGE\src\ChalkApp.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <CustomBuild Include="C:\Users\Hamje\OneDrive\Desktop\프로그래밍\3학년 2학기\다이렉트X\중간고사\CHALKFORGE\CMakeLists.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{7D50D3B9-8818-3196-9999-0AFDE196A357}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>
