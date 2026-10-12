@@ -475,6 +475,35 @@ PHASE 01의 구현은 다음 지시를 기다린다.
 
 다음 결정 지점: PHASE 02 구현 시작 및 CMakeLists.txt 소스 파일 추가
 
+## PHASE 02 프롬프트 — Windows Application & Window Management
+
+프롬프트 ID: PROMPT-0002
+날짜: 2026-10-12
+개발 단계: PHASE 02 - Windows Application & Window Management
+
+핵심 지시:
+- Win32 API를 이용해 Windows 창을 생성한다.
+- 창 제목은 CHALKFORGE로 설정한다.
+- WinMain 진입점과 WndProc 메시지 처리 함수를 구현한다.
+- 메시지 루프를 구성한다.
+- WM_DESTROY에서 PostQuitMessage를 호출해 정상 종료되도록 한다.
+- CMake에서 Windows GUI 애플리케이션으로 올바르게 빌드되도록 설정한다.
+
+구현 완료 결과:
+- ChalkApp.cpp에 WinMain 및 WndProc 구현 성공
+- CMakeLists.txt에 /subsystem:windows 플래그 추가
+- 프로젝트 빌드 성공 및 CHALKFORGE 창 표시 확인
+- 창 닫기 시 정상 종료 검증
+
+검증 절차:
+- 실제 실행 파일로 창이 표시되는지 확인
+- 창 제목이 "CHALKFORGE"인지 확인
+- 창 닫기 시 오류 없이 종료되는지 확인
+
+미해결 사항:
+- Direct3D 12 초기화 및 렌더링 연계 (PHASE 03)
+- 입력 메시지 처리 (키보드, 마우스) (PHASE 03~07)
+
 ## FINAL PRINCIPLE
 
 Design → Explain → Implement → Analyze → Validate → Document → Review → Advance

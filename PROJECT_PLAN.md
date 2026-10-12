@@ -42,10 +42,12 @@ PROJECT_PLAN.md - Phase 00 계획
 12. ChalkApp.cpp 기본 애플리케이션 입력점 생성 ✅
 13. Visual Studio 2022 프로젝트 생성 (CMake) ✅
 14. 디버그/릴리스 구성 검증 ✅
+15. Win32 창 생성 구현 (PHASE 02) ✅
+16. /subsystem:windows CMake 플래그 적용 ✅
 
 ### 진행 중인 작업
-- PHASE 01: 프로젝트 구조 및 핵심 기반 (진행 중)
-- PHASE 02: Windows 애플리케이션 및 창 관리 (대기)
+- PHASE 01: 프로젝트 구조 및 핵심 기반 (완료)
+- PHASE 02: Windows 애플리케이션 및 창 관리 (완료)
 
 ### 기술적 위험
 1. **빌드 시스템 선택**: CMake vs. Visual Studio 솔루션 - 조기 결정 필요

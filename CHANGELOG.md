@@ -26,5 +26,12 @@ Format:
 - PROJECT_PLAN.md 업데이트: PHASE 01 진행 상태 및 완료된 작업 기록
 - CHANGELOG.md_self 문서화 체계 확립
 
+### [PHASE 02 IMPLEMENTATION] - 2026-10-12
+- Win32 API를 이용한 Windows 창 생성 구현
+- WinMain 진입점 및 WndProc 메시지 처리 함수 구현
+- 메시지 루프 구성 및 WM_DESTROY 처리 통해 정상 종료 지원
+- CMakeLists.txt /subsystem:windows 플래그 적용, Windows GUI 애플리케이션 설정
+- "CHALKFORGE" 제목의 창 성공적 표시 및 닫기 검증
+
 ### [Future Phases]
 - To be populated as development progresses.
