@@ -36,28 +36,26 @@ ROADMAP.md - CHALKFORGE 개발 로드맵
 
 ---
 
-## PHASE 02 — Windows 애플리케이션 및 창 관리
+## PHASE 02 — Windows Application & Window Management
 **목표**: 완전한 창 관리 시스템과 입력 처리
-**구현 범위**:
-- 완전한 Win32 창 생성 및 관리
-- 메시 처리 (WM_SIZE, WM_MOVE, WM_PAINT, 입력 메시지)
-- DPI 인식 설정
-- 여러 모니터 기본 지원
-- D3D12 스왑 체인용 창 크기 조정 처리
-- 키보드 메시 처리
-- 마우스 메시 처리 (추적 상태)
-- 이벤트 시스템 구현 (구조체 기반 이벤트 큐)
+**구현 범위**: Win32 API를 이용한 Windows 창 생성 및 관리 (기존 ChalkApp.cpp 수정)
+- WinMain 진입점 및 WndProc 메시지 처리 함수 구현
+- 메시지 루프 구성 (GetMessage, TranslateMessage, DispatchMessage)
+- WM_DESTROY에서 PostQuitMessage 호출해 정상 종료 처리
+- CMake 설정: /subsystem:windows 플래그 적용, Windows GUI 애플리케이션으로 빌드
+- 창 제목 "CHALKFORGE" 설정 및 표시 확인
+- 메시지 처리: WM_PAINT 기본 배경 칠기, 창 크기 조정 지원
+- 이벤트 시스템 기본 구조 (향후 PHASE 07~08 확장 가능)
 **의존성**: PHASE 01 (핵심 애플리케이션 프레임워크)
 **생성/수정할 파일**:
-- 소스: ChalkWindow.h/.cpp (창 관리)
-- 소스: ChalkEvent.h/.cpp (이벤트 시스템)
-- 소스: ChalkInput.h/.cpp (입력 상태 추적)
-- 업데이트: CMakeLists.txt (새 소스 파일 추가)
-**기술적 위험**: 창 크기 조정으로 인해 D3D12 리소스 재생성 문제
-**학습 목표**: Win32 API 기초, 메시 펌프, DPI 인식, 창 크기 조정 로직
-**검증 절차**: 창 생성, 크기 조정 처리, 입력 메시지 처리
-**수락 기준**: 적절한 DPI 처리 기능이 있는 크기 조정 가능한 창, 이벤트 시스템 기능적
-**미해결 이슈**: 이 단계에 해당 없음
+- 수정: src/ChalkApp.cpp (WinMain, WndProc 추가)
+- 수정: CMakeLists.txt (/subsystem:windows 플래그 추가)
+- 참고: ChalkWindow.h/cpp, ChalkEvent.h/cpp, ChalkInput.h/cpp는 PHASE 07~08以降에 구현 예정이지만, PHASE 02에서는 기존 ChalkApp.cpp로 대체 가능
+**기술적 위험**: Win32 API 호환성; 향후 D3D12 스왑 체인 리사이징 및 입력 메시지 연계
+**학습 목표**: Win32 API 기초, WinMain 구조, WndProc 패턴, 메시 루프, 윈도우 클래스 등록, 서브시스템 설정
+**검증 절차**: 프로젝트 빌드 성공, "CHALKFORGE" 제목의 창 표시, 창 닫기 시 정상 종료 확인
+**수락 기준**: 프로젝트 빌드 및 실행, 제목 "CHALKFORGE"가 있는 창 표시, WM_DESTROY를 통한 정상 종료, CMake /subsystem:windows 설정 확인
+**미해결 이슈**: 입력 메시지 처리 (키보드, 마우스) 및 DPI 인식은 PHASE 03~07에서 추가 구현 예정;향후 D3D12 윈도우 리사이징 연계 검증 필요
 
 ---
 
