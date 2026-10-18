@@ -62,7 +62,7 @@ ROADMAP.md - CHALKFORGE 개발 로드맵
 ---
 
 ## PHASE 03 — Direct3D 12 초기화 및 기본 렌더링
-**상태: 진행 중 (문서 정합화 단계)**
+**상태: 완료**
 **목표**: 핵심 D3D12 디바이스, 명령 큐, 스왑 체인 생성 및 첫 번째 삼각형
 **구현 범위**:
 - 누락된 PHASE 01 기반 파일 정식 구현 (ChalkLogger, ChalkError, ChalkConfig, ChalkMath, ChalkApp.h) — PHASE 03에 필요한 최소 범위만
@@ -105,6 +105,7 @@ ROADMAP.md - CHALKFORGE 개발 로드맵
 ---
 
 ## PHASE 04 — GPU 리소스 관리 및 렌더 파이프라인 안정화
+**상태: 진행 중**
 **목표**: robust GPU 리소스 관리 및 렌더 파이프라인 패턴
 **구현 범위**:
 - 명령 할당자/목록 기록 패턴 (프레임당)
@@ -115,6 +116,18 @@ ROADMAP.md - CHALKFORGE 개발 로드맵
 - 적절한 명령 큐 신호/대기와 함께 렌더 루프
 - D3D12 생성 콜backs 전체에 걸친 오류 확인
 - 리소스 수명 추적 (CPU 측 핸들)
+
+**구조 결정**: GPU 자원 관리를 위해 `ChalkFence`, `ChalkBarrier`, `ChalkResource` 세 헬퍼 클래스를 실제 구현하고, `ChalkGraphics`가 이들을 멤버로 소유·조립한다. 과도한 추상화를 피하고 이후 단계(PHASE 05+)에서 확장할 여지를 남긴다. (DECISIONS.md 참조)
+
+**내부 검증 단계** (PHASE 04는 각 항목을 개별 검증하며, 미확인 항목은 완료로 표기하지 않음):
+1. 펜싱 — `ChalkFence`로 프레임 간 자원 재사용 안전 (기존 fence 로직 이관)
+2. 리소스 바리어 — `ChalkBarrier` 도우미로 상태 전이 정상 (PRESENT↔RT, DEPTH_WRITE)
+3. 리소스 수명 — `ChalkResource`로 CPU 측 핸들 추적 및 해제 시 누수 없음
+4. 트리플 버퍼링 — 3개 프레임 자원으로 안정적 멀티 프레임 렌더링
+5. 깊이 버퍼 — 백 버퍼별 깊이 리소스/DSV 부착, 깊이 테스트 활성화
+6. 리사이즈 — 깊이 버퍼 포함 전 자원 재생성 정상
+7. 오류 확인 — 모든 D3D12 생성 콜 오류 처리(FAIL)
+
 **의존성**: PHASE 03 (기본 D3D12 초기화)
 **생성/수정할 파일**:
 - 소스: ChalkResource.h/.cpp (GPU 리소스 관리)

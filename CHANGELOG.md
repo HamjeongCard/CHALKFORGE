@@ -51,5 +51,21 @@ Format:
 - Removed
   - build/ 디렉터리 Git 추적 해제 (git rm -r --cached build, .gitignore에 build/ 추가)
 
+### [PHASE 04 IMPLEMENTATION] - 2026-10-19
+- Added
+  - ChalkFence (.h/.cpp): 펜스/이벤트/per-frame 값 캡슐화 (Initialize/Shutdown/IsInitialized/Signal/WaitForValue/WaitForFrame/WaitForGpu/CompletedValue/FrameValue/SetFrameValue)
+  - ChalkBarrier (.h/.cpp): `Transition(list, resource, before, after)` 리소스 상태 전이 도우미
+  - ChalkResource (.h/.cpp): ID3D12Resource 래퍼(state/이름/수명 로깅) + CreateDepthBuffer 도우미
+- Changed
+  - ChalkConfig.h: `kSwapChainBufferCount` 2 → 3 (트리플 버퍼링)
+  - ChalkGraphics.h/.cpp: fence 로직을 `ChalkFence`로 이관, 인라인 barrier를 `ChalkBarrier::Transition`으로 대체, 백 버퍼별 깊이 리소스(`depthStencils_[kFrameCount]`) + DSV 힙(`dsvHeap_`, `dsvDescriptorSize_`) 추가, `CreateDepthStencilBuffer(int, int)`, PSO depth state(`DepthEnable=TRUE`/`DepthWriteMask=ALL`/`DepthFunc=LESS`/DSVFormat=D32_FLOAT), `OMSetRenderTargets`에 DSV 연결 및 `ClearDepthStencilView`
+  - ChalkGraphics.cpp `OnResize`: 깊이 리소스 Reset 후 재생성, 재생성 결과 검사·오류 로깅 하드닝
+  - ChalkGraphics.cpp `ReleaseResources`: `depthStencils_`/`dsvHeap_` 해제 및 `dsvDescriptorSize_` 초기화
+  - CMakeLists.txt: `ChalkFence.cpp`, `ChalkBarrier.cpp`, `ChalkResource.cpp` 추가
+- Verified
+  - Debug/Release 빌드 성공
+  - 실행 로그 확인: 깊이 버퍼 3개 생성(1280x720) 및 정상 종료, ERROR 레벨 로그 없음
+  - 미완료: 삼각형/깊이/리사이즈 사용자 육안 확인
+
 ### [Future Phases]
 - To be populated as development progresses.

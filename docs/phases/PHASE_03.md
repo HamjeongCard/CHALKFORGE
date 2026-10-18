@@ -2,18 +2,20 @@ PHASE 03 — Direct3D 12 초기화 및 기본 렌더링
 
 **목표**: Direct3D 12 디바이스/스왑 체인을 초기화하고, 파이프라인을 구성하여 단일 삼각형을 백 버퍼에 렌더링한다. GPU 동기화와 창 리사이즈 처리를 포함한다.
 
-**구현 완료 상태**: 구현 및 내부 검증 완료 (Implemented, Build/Runtime Verified)
-- 단, 삼각형 화면 출력 및 리사이즈 동작의 육안 확인은 미검증 (사용자 확인 항목)
+**구현 완료 상태**: 구현 및 검증 완료 (Implemented, Build/Runtime/Visual Verified)
+- 삼각형 화면 출력 및 리사이즈 동작 사용자 육안 확인 완료 → PHASE 03 완료
 
-**확인된 상태 (AI 직접 실행 검증)**:
+**검증 완료 상태**:
+
+AI 직접 실행 검증:
 - 빌드: Debug/Release 구성 모두 성공 (경고 없음, C4244 해결 후)
 - 실행: `build\Debug\CHALKFORGE.exe` 무크래시 실행, 메시지 루프 지속 동작 확인
 - 로그(`chalkforge.log`): `CHALKFORGE initializing` → `D3D12 debug layer enabled.` → `D3D12 graphics initialized (1280x720).` (오류 없음)
 - 셰이더 복사: `build\Debug\shaders\TriangleVS.hlsl`, `TrianglePS.hlsl` 배치 확인
 
-**미검증 상태 (사용자 확인 필요)**:
-- 삼각형이 실제로 화면에 표시되는지 (육안)
-- 창 크기 조절 시 백 버퍼/뷰포트가 정상 갱신되는지
+사용자 육안 확인 완료 (PHASE 03 완료 근거):
+- 삼각형이 화면에 정상 표시됨
+- 창 크기 조절 시 백 버퍼/뷰포트가 정상 갱신됨
 
 **작업 단계 및 변경 파일**:
 
@@ -127,7 +129,7 @@ add_custom_command(TARGET CHALKFORGE POST_BUILD
 - C4244(wide→narrow 변환 경고): `src/ChalkGraphics.cpp` 익명 네임스페이스에 로컬 `WideToUtf8(const std::wstring&)`(`WideCharToMultiByte(CP_UTF8, ...)` 2회 호출) 추가 후 두 호출부 교체 → 경고 없이 빌드 성공
 
 **기술적 위험**:
-- 스왑 체인 리사이즈와 GPU 동기화(WaitForGpu) 순서 오류 시 크래시 가능 → 리사이즈 경로 사용자 육안 검증 필요
+- 스왑 체인 리사이즈와 GPU 동기화(WaitForGpu) 순서 오류 시 크래시 가능 → 리사이즈 경로 사용자 육안 검증 완료 (정상 동작 확인)
 - FLIP_DISCARD 모델에서 백 버퍼 접근 전 PRESENT→RT barrier 누락 시 디버그 레이어 경고
 
 **학습 목표**: D3D12 디바이스/큐/스왑 체인, 디스크립터 힙, 루트 서명, PSO, 리소스 배리어, Fence 기반 GPU 동기화, HLSL 런타임 컴파일, PeekMessage 기반 렌더 루프
@@ -135,16 +137,15 @@ add_custom_command(TARGET CHALKFORGE POST_BUILD
 **검증 절차**:
 1. 프로젝트 성공적 빌드 (Debug/Release) ✅
 2. 실행 파일 무크래시 실행 및 초기화 로그 확인 ✅
-3. 삼각형 화면 표시 확인 ⬜ (미검증 — 사용자 확인 필요)
-4. 창 리사이즈 시 정상 갱신 확인 ⬜ (미검증 — 사용자 확인 필요)
+3. 삼각형 화면 표시 확인 ✅ (사용자 육안 확인)
+4. 창 리사이즈 시 정상 갱신 확인 ✅ (사용자 육안 확인)
 
 **수락 기준**:
 1. Debug/Release 빌드 성공 ✅
 2. D3D12 초기화 성공 로그 (1280x720) ✅
-3. 삼각형 렌더링 (육안) ⬜
-4. 리사이즈 정상 동작 ⬜
+3. 삼각형 렌더링 (육안) ✅ (사용자 육안 확인)
+4. 리사이즈 정상 동작 ✅ (사용자 육안 확인)
 
 **미해결 이슈**:
-- 삼각형 화면 출력 및 리사이즈 동작의 육안 검증 미완료
 - 깊이 버퍼 미구현 (PHASE 04/05)
 - GPU 자원 세부 분리 및 프레임 동기화 고도화 (PHASE 04)

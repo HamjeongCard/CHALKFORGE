@@ -532,6 +532,35 @@ PHASE 01의 구현은 다음 지시를 기다린다.
 - 삼각형 화면 출력 및 리사이즈 동작 육안 확인 미완료
 - 깊이 버퍼, 텍스처 등 추가 GPU 리소스는 PHASE 04에서 진행
 
+## PHASE 04 프롬프트 — GPU Resource Management & Render Pipeline Stabilization
+
+프롬프트 ID: PROMPT-0004
+날짜: 2026-10-19
+개발 단계: PHASE 04 - GPU 리소스 관리 및 렌더 파이프라인 안정화
+
+핵심 지시:
+- GPU 리소스 관리와 렌더 파이프라인 패턴(명령 할당자/목록, 리소스 바리어, 깊이 버퍼, 트리플 버퍼링, 펜싱 동기화)을 헬퍼 클래스로 분리·구현한다.
+- 펜싱/바리어/리소스 수명/트리플 버퍼링/깊이 버퍼/리사이즈/오류 확인의 7개 항목을 개별 검증한다.
+- 빌드 성공 / 실제 실행 / 화면 출력 확인을 구분하여 기록하고, 미확인 항목은 완료로 표기하지 않는다.
+
+구현 완료 결과 (Step A~F):
+- Step A: 문서 정합화 (PROJECT_PLAN/ROADMAP/TASKS/CODE_GUIDE/ARCHITECTURE/DECISIONS, docs/phases/PHASE_04.md 생성)
+- Step B: ChalkFence.h/.cpp — 펜스/이벤트/per-frame 값 캡슐화, ChalkGraphics fence 로직 이관
+- Step C: ChalkBarrier.h/.cpp — Transition 도우미, 인라인 barrier 대체
+- Step D: ChalkResource.h/.cpp — ID3D12Resource 래퍼 + 수명 로깅 + CreateDepthBuffer 도우미
+- Step E: 트리플 버퍼링(kSwapChainBufferCount=3) + 백 버퍼별 깊이 버퍼/DSV/PSO DepthEnable
+- Step F: OnResize 재생성 검사 하드닝, D3D12 콜 오류 확인 전수 점검, N프레임 in-flight/해제 순서 검토
+- Debug/Release 빌드 성공, 실행 로그(깊이 버퍼 3개 생성, 오류 없음) 확인
+
+검증 절차:
+- Debug/Release 빌드 성공 여부 확인 (완료)
+- 실행 파일 무크래시 실행 및 chalkforge.log 확인 (완료, ERROR 없음)
+- 삼각형 + 깊이 + 리사이즈 육안 확인 (사용자 확인 대기)
+
+미해결 사항:
+- 사용자 육안 확인(삼각형/깊이/리사이즈) 미완료 — 확인 전 PHASE 04 완료 표기 금지
+- 텍스처 등 추가 GPU 리소스는 이후 단계에서 진행
+
 ## FINAL PRINCIPLE
 
 Design → Explain → Implement → Analyze → Validate → Document → Review → Advance

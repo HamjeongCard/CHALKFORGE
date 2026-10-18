@@ -106,6 +106,12 @@ CHALKFORGE는 C++ 기반의 Direct3D 12 기반 3D 칠판 그리기 프레임워�
 - 프레인 인덱스 (스왑 체인으로부터 백 버퍼 인덱스)
 - 리소스 재사용 전 GPU 대기
 
+### 리소스 관리 컴포넌트 (PHASE 04)
+설계 개념을 실제 헬퍼 클래스로 분리한다. `ChalkGraphics`가 이들을 멤버로 소유·조립한다.
+- **ChalkFence**: 펜스/이벤트/per-frame 값 캡슐화. `Signal`, `WaitForValue`, `WaitForGpu`, `CompletedValue` 제공 (GPU↔CPU 동기화)
+- **ChalkBarrier**: 리소스 상태 전이 도우미. `Transition(명령 목록, 리소스, 이전 상태, 이후 상태)` 구성
+- **ChalkResource**: `ID3D12Resource` 래퍼. 현재 상태 추적, 이름/디버그 태그, CPU 측 핸들 수명 등록·해제 로깅, 깊이 버퍼 생성 도우미
+
 ## 씬 시스템
 ### 수학
 - DirectXMath 라이브러리 사용 (XMVECTOR, XMMATRIX 유형)

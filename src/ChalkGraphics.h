@@ -1,6 +1,8 @@
 #pragma once
 
 #include "ChalkConfig.h"
+#include "ChalkFence.h"
+#include "ChalkResource.h"
 
 #include <windows.h>
 #include <d3d12.h>
@@ -33,6 +35,7 @@ private:
     bool CreateSwapChain(HWND hWnd, int width, int height);
     bool CreateDescriptorHeaps();
     bool CreateRenderTargets();
+    bool CreateDepthStencilBuffer(int width, int height);
     bool CreateCommandObjects();
     bool CreateFence();
     bool CreatePipeline();
@@ -48,6 +51,8 @@ private:
     Microsoft::WRL::ComPtr<IDXGISwapChain3> swapChain_;
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> rtvHeap_;
     Microsoft::WRL::ComPtr<ID3D12Resource> renderTargets_[kFrameCount];
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> dsvHeap_;
+    ChalkResource depthStencils_[kFrameCount];
     Microsoft::WRL::ComPtr<ID3D12CommandAllocator> commandAllocators_[kFrameCount];
     Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList_;
 
@@ -56,11 +61,10 @@ private:
     Microsoft::WRL::ComPtr<ID3D12Resource> vertexBuffer_;
     D3D12_VERTEX_BUFFER_VIEW vertexBufferView_ = { };
 
-    Microsoft::WRL::ComPtr<ID3D12Fence> fence_;
-    HANDLE fenceEvent_ = nullptr;
-    UINT64 frameFenceValues_[kFrameCount] = { };
+    ChalkFence fence_;
 
     UINT rtvDescriptorSize_ = 0;
+    UINT dsvDescriptorSize_ = 0;
     UINT frameIndex_ = 0;
     int width_ = 0;
     int height_ = 0;

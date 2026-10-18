@@ -33,6 +33,29 @@ CODE_GUIDE.md - CHALKFORGE 코드 가이드
 - **내부 메서드**: `CreateDeviceAndQueue`/`CreateSwapChain`/`CreateDescriptorHeaps`/`CreateRenderTargets`/`CreateCommandObjects`/`CreateFence`/`CreatePipeline`/`CreateTriangleGeometry`/`PopulateCommandList`/`MoveToNextFrame`/`ReleaseResources`
 - **셰이더**: `shaders/TriangleVS.hlsl`·`TrianglePS.hlsl`을 실행 시 `D3DCompile`로 컴파일. CMake POST_BUILD가 exe 옆 `shaders\`로 복사
 
+### ChalkFence (PHASE 04)
+- **파일**: PHASE 04에 생성 (src/ChalkFence.h/.cpp)
+- **담당**: GPU 동기화 펜스/이벤트/per-frame 값 캡슐화. 기존 `ChalkGraphics`의 fence 로직을 이 클래스로 이관
+- **주요 메서드**:
+  - `Signal(ID3D12CommandQueue*, UINT64)`: 펜스 값으로 큐 신호, `CompletedValue` 반환
+  - `WaitForValue(UINT64)`: `SetEventOnCompletion` + `WaitForSingleObject`로 특정 값 대기
+  - `WaitForGpu(ID3D12CommandQueue*, UINT64)`: 현재 값까지 GPU 대기
+  - `CompletedValue()`: 현재 완료된 펜스 값 조회
+- **per-frame 값**: `frameFenceValues_[kFrameCount]`를 내부 관리
+
+### ChalkBarrier (PHASE 04)
+- **파일**: PHASE 04에 생성 (src/ChalkBarrier.h/.cpp)
+- **담당**: 리소스 상태 전이(barrier) 도우미. 인라인 barrier 구성 코드를 대체
+- **주요 메서드**:
+  - `Transition(ID3D12GraphicsCommandList*, ID3D12Resource*, D3D12_RESOURCE_STATES before, D3D12_RESOURCE_STATES after)`: 단일 리소스 상태 전이 배리어 삽입
+- **사용 예**: PRESENT→RENDER_TARGET, RENDER_TARGET→PRESENT, DEPTH_WRITE 등
+
+### ChalkResource (PHASE 04)
+- **파일**: PHASE 04에 생성 (src/ChalkResource.h/.cpp)
+- **담당**: `ID3D12Resource` 래퍼 — 현재 state 추적, 이름/디버그 태그, 수명 등록/해제 로깅(CPU 측 핸들 추적), 깊이 버퍼 생성 도우미
+- **주요 필드/메서드**: `Get()`(원시 리소스 반환), `State()`/`SetState()`, `CreateDepthBuffer(ID3D12Device*, DSV 힙, int w, int h, DXGI_FORMAT)`, 이름 설정
+- **수명 추적**: 등록/해제 시 `ChalkLogger`로 로깅하여 누수 추적 지원
+
 ### ChalkWindow
 - **파일**: PHASE 03에서 ChalkApp.cpp 내 WndProc에서 클래스로 분리 (src/ChalkWindow.h/.cpp)
 - **담당**: Win32 창 생성 및 메시 처리 (UNICODE, Per-Monitor V2 DPI)
@@ -89,6 +112,9 @@ CHALKFORGE/
 │   ├── ChalkError.h/.cpp        # PHASE 03 오류 처리
 │   ├── ChalkConfig.h            # PHASE 03 구성 기본값
 │   ├── ChalkGraphics.h/.cpp     # PHASE 03 D3D12 통합 (디바이스/큐/스왑 체인/RTV/PSO)
+│   ├── ChalkFence.h/.cpp        # PHASE 04 GPU 동기화 펜스
+│   ├── ChalkBarrier.h/.cpp      # PHASE 04 리소스 바리어 도우미
+│   ├── ChalkResource.h/.cpp     # PHASE 04 GPU 리소스 래퍼/수명 추적
 │   ├── ChalkMath.h              # PHASE 03 최소 / PHASE 05 확장 (수학 유틸리티)
 │   ├── ChalkCamera.h/.cpp       # PHASE 05 카메라
 │   ├── ChalkBoard.h/.cpp        # PHASE 06 3D 보드

@@ -1,11 +1,14 @@
 #include "ChalkGraphics.h"
 
+#include "ChalkBarrier.h"
 #include "ChalkError.h"
 #include "ChalkLogger.h"
+#include "ChalkResource.h"
 
 #include <d3dcompiler.h>
 
 #include <cstring>
+#include <cwchar>
 #include <fstream>
 #include <string>
 #include <vector>
@@ -19,6 +22,8 @@ const D3D_FEATURE_LEVEL kFeatureLevels[] = {
 };
 
 const float kClearColor[4] = { 0.05f, 0.05f, 0.08f, 1.0f };
+
+constexpr DXGI_FORMAT kDepthStencilFormat = DXGI_FORMAT_D32_FLOAT;
 
 struct Vertex {
     float position[3];
@@ -136,6 +141,9 @@ bool ChalkGraphics::Initialize(HWND hWnd, int width, int height) {
         if (!CreateRenderTargets()) {
             return false;
         }
+        if (!CreateDepthStencilBuffer(width, height)) {
+            return false;
+        }
         if (!CreateCommandObjects()) {
             return false;
         }
@@ -232,7 +240,15 @@ bool ChalkGraphics::CreateDescriptorHeaps() {
     rtvHeapDesc.NodeMask = 0;
     FAIL(device_->CreateDescriptorHeap(&rtvHeapDesc, IID_PPV_ARGS(&rtvHeap_)));
 
+    D3D12_DESCRIPTOR_HEAP_DESC dsvHeapDesc = { };
+    dsvHeapDesc.NumDescriptors = kFrameCount;
+    dsvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
+    dsvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
+    dsvHeapDesc.NodeMask = 0;
+    FAIL(device_->CreateDescriptorHeap(&dsvHeapDesc, IID_PPV_ARGS(&dsvHeap_)));
+
     rtvDescriptorSize_ = device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+    dsvDescriptorSize_ = device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
     return true;
 }
 
@@ -242,6 +258,20 @@ bool ChalkGraphics::CreateRenderTargets() {
         FAIL(swapChain_->GetBuffer(i, IID_PPV_ARGS(&renderTargets_[i])));
         device_->CreateRenderTargetView(renderTargets_[i].Get(), nullptr, handle);
         handle.ptr += rtvDescriptorSize_;
+    }
+    return true;
+}
+
+bool ChalkGraphics::CreateDepthStencilBuffer(int width, int height) {
+    wchar_t name[64] = { };
+    for (UINT i = 0; i < kFrameCount; ++i) {
+        swprintf_s(name, L"DepthStencil[%u]", i);
+        if (!depthStencils_[i].CreateDepthBuffer(device_.Get(), dsvHeap_.Get(), i,
+                                                 static_cast<UINT>(width),
+                                                 static_cast<UINT>(height),
+                                                 kDepthStencilFormat, name)) {
+            return false;
+        }
     }
     return true;
 }
@@ -259,16 +289,7 @@ bool ChalkGraphics::CreateCommandObjects() {
 }
 
 bool ChalkGraphics::CreateFence() {
-    FAIL(device_->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&fence_)));
-    for (UINT i = 0; i < kFrameCount; ++i) {
-        frameFenceValues_[i] = 0;
-    }
-    fenceEvent_ = CreateEventW(nullptr, FALSE, FALSE, nullptr);
-    if (fenceEvent_ == nullptr) {
-        ChalkLogger::Get().Error("Failed to create fence event.");
-        return false;
-    }
-    return true;
+    return fence_.Initialize(device_.Get(), kFrameCount);
 }
 
 bool ChalkGraphics::CreatePipeline() {
@@ -327,6 +348,12 @@ bool ChalkGraphics::CreatePipeline() {
     blendState.RenderTarget[0].LogicOp = D3D12_LOGIC_OP_NOOP;
     blendState.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
 
+    D3D12_DEPTH_STENCIL_DESC depthStencilState = { };
+    depthStencilState.DepthEnable = TRUE;
+    depthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
+    depthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS;
+    depthStencilState.StencilEnable = FALSE;
+
     D3D12_GRAPHICS_PIPELINE_STATE_DESC pipelineDesc = { };
     pipelineDesc.InputLayout = { inputLayout, _countof(inputLayout) };
     pipelineDesc.pRootSignature = rootSignature_.Get();
@@ -334,12 +361,12 @@ bool ChalkGraphics::CreatePipeline() {
     pipelineDesc.PS = { pixelShader->GetBufferPointer(), pixelShader->GetBufferSize() };
     pipelineDesc.RasterizerState = rasterizerState;
     pipelineDesc.BlendState = blendState;
-    pipelineDesc.DepthStencilState.DepthEnable = FALSE;
-    pipelineDesc.DepthStencilState.StencilEnable = FALSE;
+    pipelineDesc.DepthStencilState = depthStencilState;
     pipelineDesc.SampleMask = UINT_MAX;
     pipelineDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
     pipelineDesc.NumRenderTargets = 1;
     pipelineDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
+    pipelineDesc.DSVFormat = kDepthStencilFormat;
     pipelineDesc.SampleDesc.Count = 1;
     FAIL(device_->CreateGraphicsPipelineState(&pipelineDesc, IID_PPV_ARGS(&pipelineState_)));
 
@@ -408,20 +435,21 @@ void ChalkGraphics::RenderFrame() {
 }
 
 void ChalkGraphics::PopulateCommandList() {
-    D3D12_RESOURCE_BARRIER barrier = { };
-    barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-    barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-    barrier.Transition.pResource = renderTargets_[frameIndex_].Get();
-    barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-    barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_PRESENT;
-    barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
-    commandList_->ResourceBarrier(1, &barrier);
+    ChalkBarrier::Transition(
+        commandList_.Get(),
+        renderTargets_[frameIndex_].Get(),
+        D3D12_RESOURCE_STATE_PRESENT,
+        D3D12_RESOURCE_STATE_RENDER_TARGET);
 
     D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = rtvHeap_->GetCPUDescriptorHandleForHeapStart();
     rtvHandle.ptr += static_cast<SIZE_T>(frameIndex_) * rtvDescriptorSize_;
 
-    commandList_->OMSetRenderTargets(1, &rtvHandle, FALSE, nullptr);
+    D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = dsvHeap_->GetCPUDescriptorHandleForHeapStart();
+    dsvHandle.ptr += static_cast<SIZE_T>(frameIndex_) * dsvDescriptorSize_;
+
+    commandList_->OMSetRenderTargets(1, &rtvHandle, FALSE, &dsvHandle);
     commandList_->ClearRenderTargetView(rtvHandle, kClearColor, 0, nullptr);
+    commandList_->ClearDepthStencilView(dsvHandle, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
 
     commandList_->SetGraphicsRootSignature(rootSignature_.Get());
     commandList_->SetPipelineState(pipelineState_.Get());
@@ -442,38 +470,29 @@ void ChalkGraphics::PopulateCommandList() {
     commandList_->IASetVertexBuffers(0, 1, &vertexBufferView_);
     commandList_->DrawInstanced(3, 1, 0, 0);
 
-    barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
-    barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
-    commandList_->ResourceBarrier(1, &barrier);
+    ChalkBarrier::Transition(
+        commandList_.Get(),
+        renderTargets_[frameIndex_].Get(),
+        D3D12_RESOURCE_STATE_RENDER_TARGET,
+        D3D12_RESOURCE_STATE_PRESENT);
 
     FAIL(commandList_->Close());
 }
 
 void ChalkGraphics::MoveToNextFrame() {
-    const UINT64 currentFenceValue = frameFenceValues_[frameIndex_];
-    FAIL(commandQueue_->Signal(fence_.Get(), currentFenceValue));
+    const uint64_t signalledValue = fence_.Signal(commandQueue_.Get(), frameIndex_);
 
     frameIndex_ = swapChain_->GetCurrentBackBufferIndex();
-
-    if (fence_->GetCompletedValue() < frameFenceValues_[frameIndex_]) {
-        FAIL(fence_->SetEventOnCompletion(frameFenceValues_[frameIndex_], fenceEvent_));
-        WaitForSingleObjectEx(fenceEvent_, INFINITE, FALSE);
-    }
-
-    frameFenceValues_[frameIndex_] = currentFenceValue + 1;
+    fence_.WaitForFrame(frameIndex_);
+    fence_.SetFrameValue(frameIndex_, signalledValue + 1);
 }
 
 void ChalkGraphics::WaitForGpu() {
-    if (!commandQueue_ || !fence_ || !fenceEvent_) {
+    if (!commandQueue_ || !fence_.IsInitialized()) {
         return;
     }
 
-    FAIL(commandQueue_->Signal(fence_.Get(), frameFenceValues_[frameIndex_]));
-    if (fence_->GetCompletedValue() < frameFenceValues_[frameIndex_]) {
-        FAIL(fence_->SetEventOnCompletion(frameFenceValues_[frameIndex_], fenceEvent_));
-        WaitForSingleObjectEx(fenceEvent_, INFINITE, FALSE);
-    }
-    frameFenceValues_[frameIndex_]++;
+    fence_.WaitForGpu(commandQueue_.Get(), frameIndex_);
 }
 
 void ChalkGraphics::OnResize(int width, int height) {
@@ -491,13 +510,17 @@ void ChalkGraphics::OnResize(int width, int height) {
 
     for (UINT i = 0; i < kFrameCount; ++i) {
         renderTargets_[i].Reset();
+        depthStencils_[i].Reset();
     }
 
     FAIL(swapChain_->ResizeBuffers(kFrameCount, static_cast<UINT>(width),
                                    static_cast<UINT>(height), DXGI_FORMAT_UNKNOWN, 0));
 
     frameIndex_ = swapChain_->GetCurrentBackBufferIndex();
-    CreateRenderTargets();
+    if (!CreateRenderTargets() || !CreateDepthStencilBuffer(width, height)) {
+        ChalkLogger::Get().Error("Failed to recreate render targets after resize.");
+        return;
+    }
 
     width_ = width;
     height_ = height;
@@ -513,11 +536,6 @@ void ChalkGraphics::Finalize() {
 }
 
 void ChalkGraphics::ReleaseResources() {
-    if (fenceEvent_ != nullptr) {
-        CloseHandle(fenceEvent_);
-        fenceEvent_ = nullptr;
-    }
-
     vertexBuffer_.Reset();
     pipelineState_.Reset();
     rootSignature_.Reset();
@@ -525,20 +543,20 @@ void ChalkGraphics::ReleaseResources() {
     for (UINT i = 0; i < kFrameCount; ++i) {
         commandAllocators_[i].Reset();
         renderTargets_[i].Reset();
+        depthStencils_[i].Reset();
     }
     rtvHeap_.Reset();
+    dsvHeap_.Reset();
     swapChain_.Reset();
-    fence_.Reset();
+    fence_.Shutdown();
     commandQueue_.Reset();
     device_.Reset();
     factory_.Reset();
 
     rtvDescriptorSize_ = 0;
+    dsvDescriptorSize_ = 0;
     frameIndex_ = 0;
     width_ = 0;
     height_ = 0;
     vertexBufferView_ = { };
-    for (UINT i = 0; i < kFrameCount; ++i) {
-        frameFenceValues_[i] = 0;
-    }
 }

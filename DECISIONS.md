@@ -319,6 +319,57 @@ DECISIONS.md - CHALKFORGE 기술 결정사항
 
 ---
 
+## PHASE 04 — GPU 리소스 관리 및 렌더 파이프라인 안정화 결정
+### 결정: 트리플 버퍼링 적용 (kSwapChainBufferCount = 3)
+**날짜**: 2026-10-19
+
+**선택된 대안**: 더블 버퍼링(2) 유지 vs. 트리플 버퍼링(3)
+
+**선택된 내용**: `ChalkConfig::kSwapChainBufferCount`를 3으로 변경하고 `kFrameCount = kSwapChainBufferCount`를 유지한다. 스왑 체인 버퍼 수, RTV 배열, 명령 할당자 배열, per-frame 펜스 값이 모두 3으로 일반화된다.
+
+**선택 이유**:
+- CPU가 GPU보다 한 프레임 앞서 기록할 때 CPU 대기(stall)를 줄이는 표준 D3D12 in-flight 프레임 패턴
+- 기존 `MoveToNextFrame` 로직이 이미 N-프레임 일반화되어 있어 변경 위험이 낮음
+- PHASE 04의 "Multiple frame resources" 요구사항을 충족
+
+**거부된 대안**: 더블 버퍼링 유지 — GPU 동기화 학습 목표에 부족, 프레임 지연 여유 없음
+
+**영향**: `src/ChalkConfig.h`, `src/ChalkGraphics.cpp`(배열 크기·리소스 생성 루프), 백 버퍼별 깊이 버퍼 개수
+
+### 결정: 백 버퍼별 깊이 버퍼 생성 + 스왑 체인 부착
+**날짜**: 2026-10-19
+
+**선택된 대안**: 깊이 버퍼 없음(현 상태) vs. 단일 깊이 버퍼 vs. 백 버퍼별 깊이 버퍼
+
+**선택된 내용**: `kFrameCount`개 깊이 리소스(D32)와 전용 DSV 디스크립터 힙을 생성하고, 각 백 버퍼에 대응하는 DSV를 `OMSetRenderTargets`에 바인딩한다. PSO에 `DepthEnable=TRUE`/`DepthWriteMask=ALL`/`DepthFunc=LESS`/`DSVFormat=D32`를 설정하고 매 프레임 `ClearDepthStencilView`로 초기화한다. 리사이즈 시 모든 깊이 리소스·DSV를 재생성한다.
+
+**선택 이유**:
+- 백 버퍼별 깊이 버퍼는 프레임 간 깊이 상태 충돌을 막는 표준 D3D12 멀티버퍼 패턴
+- PHASE 04의 "깊이 버퍼 생성·스왑 체인 부착" 요구사항 충족
+- PHASE 05 이후 3D 보드·스트로크의 깊이 테스트 기반 마련
+
+**거부된 대안**: 깊이 버퍼 미사용 — 3D 깊이 상호작용 불가; 단일 깊이 버퍼 — 프레임 간 hazard 위험
+
+**영향**: `src/ChalkGraphics.cpp`(깊이 리소스·DSV 힙·barrier·PSO·렌더 루프), `src/ChalkResource`(깊이 생성 도우미)
+
+### 결정: 자원 헬퍼 도입 + ChalkGraphics가 조립
+**날짜**: 2026-10-19
+
+**선택된 대안**: ChalkGraphics 단일 클래스 유지 vs. 자원별 파일 분리(9개) vs. 헬퍼 3개 도입 후 조립
+
+**선택된 내용**: `ChalkFence`(펜스/이벤트/per-frame 값), `ChalkBarrier`(상태 전이 도우미), `ChalkResource`(ID3D12Resource 래퍼 + 상태·수명 추적) 3개를 실제 구현하고, `ChalkGraphics`가 이들을 멤버로 소유·조립한다.
+
+**선택 이유**:
+- PHASE 03의 "단일 클래스 유지" 결정(line 279 "이후 PHASE 04에서 필요 시 자원별 파일로 분리 가능")의 예고된 후속 단계
+- 펜스·바리어·리소스 수명은 PHASE 04 핵심 학습 대상으로 분리 가치가 큼
+- 9개 전면 분리 대비 과도한 추상화 없이 PHASE 05+ 확장 여지 확보
+
+**거부된 대안**: 단일 클래스 유지 — 수명·동기화 로직이 계속 비대해짐; 9개 클래스 즉시 분리 — 조기 설계 위험
+
+**영향**: `src/ChalkFence.h/.cpp`, `src/ChalkBarrier.h/.cpp`, `src/ChalkResource.h/.cpp` 신규, `CMakeLists.txt`, `src/ChalkGraphics.h/.cpp`(fence 로직 이관)
+
+---
+
 ## 주요 결정 사항 요약
 
 | 카테고리 | 결정 | 타당성 |
@@ -326,6 +377,9 @@ DECISIONS.md - CHALKFORGE 기술 결정사항
 | 빌드 시스템 | CMake + VS 2022 제너레이터 | 유연성, 현대 표준, 미래지향 |
 | 기능 수준 | 12_0 최소, 11_0 폴백 | 광범위 호환성, 핵심 D3D12 기능 |
 | D3D12 구조 | ChalkGraphics 단일 클래스 | 통합 관리, 과도한 추상화 회피 |
+| D3D12 자원 분리 | 헬퍼 3개 + ChalkGraphics 조립 | 핵심 학습 대상 분리, 확장 여지 |
+| 프레임 자원 | 트리플 버퍼링 (3) | CPU stall 감소, in-flight 패턴 |
+| 깊이 버퍼 | 백 버퍼별 D32 + DSV | 표준 멀티버퍼, 3D 깊이 기반 |
 | 셰이더 | 런타임 컴파일 (d3dcompiler) | 즉시 반영, 빌드 단순 |
 | 문자/DPI | UNICODE + Per-Monitor V2 | 고해상도 대응, 선제 전환 |
 | 렌더링 | 기하학 기반 튜브 | 3D 폭 지각, 적절한 깊이 |
@@ -336,4 +390,4 @@ DECISIONS.md - CHALKFORGE 기술 결정사항
 | Undo/Redo | 명령 패턴 | 세부 단위, 메모리 효율적 |
 | 좌표 | 우측 Y-up | DirectXMath 기본값, HLSL 일관성 |
 
-**다음 결정 지점**: PHASE 04 - 자원별 파일 분리 여부; PHASE 08 - 렌더링 전략 선택 검증.
+**다음 결정 지점**: PHASE 05 - 카메라/뷰 행렬 및 스트로크 기하학 표현 방식 검증; PHASE 08 - 렌더링 전략 선택 검증.

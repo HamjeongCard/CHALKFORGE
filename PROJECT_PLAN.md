@@ -47,10 +47,12 @@ PROJECT_PLAN.md - Phase 00 계획
 16. /subsystem:windows CMake 플래그 적용 ✅
 
 ### 진행 중인 작업
-- PHASE 03: Direct3D 12 초기화 및 기본 렌더링 (진행 중, 문서 정합화 단계)
-  - 현재 단계: PHASE 03. 상세 계획은 ROADMAP.md / TASKS.md 참조. 이 문서는 PHASE 00 기록이며 이후 단계 완료 시 갱신한다.
+- (없음)
 - (완료) PHASE 01: 프로젝트 구조 및 핵심 기반 — 빌드 시스템/진입점
 - (완료) PHASE 02: Windows 애플리케이션 및 창 관리
+- (완료) PHASE 03: Direct3D 12 초기화 및 기본 렌더링 — 삼각형 렌더링/리사이즈 사용자 육안 확인 완료
+- PHASE 04: GPU 리소스 관리 및 렌더 파이프라인 안정화 (진행 중, 문서 정합화 단계)
+  - 현재 단계: PHASE 04. 상세 계획은 ROADMAP.md / TASKS.md / docs/phases/PHASE_04.md 참조.
 
 ### 기술적 위험
 1. **빌드 시스템 선택**: CMake vs. Visual Studio 솔루션 - 조기 결정 필요
