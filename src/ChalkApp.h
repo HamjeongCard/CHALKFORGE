@@ -25,12 +25,19 @@ public:
     int CmdShow() const noexcept { return nCmdShow_; }
 
 private:
+    float ComputeDeltaSeconds();
+    void UpdateCamera(float deltaSeconds);
+
     HINSTANCE hInstance_ = nullptr;
     int nCmdShow_ = 0;
     bool initialized_ = false;
 
     int width_ = 0;
     int height_ = 0;
+
+    LARGE_INTEGER performanceFrequency_{ };
+    LARGE_INTEGER lastFrameCounter_{ };
+    bool hasLastFrameCounter_ = false;
 
     std::unique_ptr<ChalkWindow> window_;
     std::unique_ptr<ChalkGraphics> graphics_;

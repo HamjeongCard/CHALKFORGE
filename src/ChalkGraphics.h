@@ -1,8 +1,12 @@
 #pragma once
 
+#include "ChalkCamera.h"
 #include "ChalkConfig.h"
 #include "ChalkFence.h"
+#include "ChalkMaterial.h"
+#include "ChalkMesh.h"
 #include "ChalkResource.h"
+#include "ChalkScene.h"
 
 #include <windows.h>
 #include <d3d12.h>
@@ -28,8 +32,13 @@ public:
 
     bool IsInitialized() const noexcept { return initialized_; }
 
+    ChalkCamera& Camera() noexcept { return camera_; }
+    const ChalkCamera& Camera() const noexcept { return camera_; }
+
 private:
     static constexpr UINT kFrameCount = static_cast<UINT>(ChalkConfig::kFrameCount);
+    static constexpr UINT kMaterialCount = 2;
+    static constexpr UINT kMaxSceneObjects = 16;
 
     bool CreateDeviceAndQueue();
     bool CreateSwapChain(HWND hWnd, int width, int height);
@@ -39,7 +48,9 @@ private:
     bool CreateCommandObjects();
     bool CreateFence();
     bool CreatePipeline();
-    bool CreateTriangleGeometry();
+    bool CreateSceneResources();
+    bool CreateUploadBuffer(UINT64 size, const wchar_t* name,
+                            Microsoft::WRL::ComPtr<ID3D12Resource>& outResource);
 
     void PopulateCommandList();
     void MoveToNextFrame();
@@ -58,8 +69,13 @@ private:
 
     Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> pipelineState_;
-    Microsoft::WRL::ComPtr<ID3D12Resource> vertexBuffer_;
-    D3D12_VERTEX_BUFFER_VIEW vertexBufferView_ = { };
+    Microsoft::WRL::ComPtr<ID3D12Resource> objectConstantBuffer_;
+    Microsoft::WRL::ComPtr<ID3D12Resource> lightConstantBuffer_;
+
+    ChalkCamera camera_;
+    ChalkScene scene_;
+    ChalkMesh cubeMesh_;
+    ChalkMaterial materials_[kMaterialCount];
 
     ChalkFence fence_;
 

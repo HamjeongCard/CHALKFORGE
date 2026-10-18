@@ -12,4 +12,8 @@ struct ChalkConfig {
 
     static constexpr const char* kLogFileName = "chalkforge.log";
     static constexpr bool kEnableFileLogging = true;
+
+    static constexpr float kCameraMoveSpeed = 4.0f;
+    static constexpr float kCameraOrbitSensitivity = 0.006f;
+    static constexpr float kMaxFrameDeltaSeconds = 0.1f;
 };

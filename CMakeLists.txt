@@ -5,11 +5,16 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 add_executable(CHALKFORGE
     src/ChalkApp.cpp
     src/ChalkBarrier.cpp
+    src/ChalkCamera.cpp
     src/ChalkError.cpp
     src/ChalkFence.cpp
     src/ChalkGraphics.cpp
     src/ChalkLogger.cpp
+    src/ChalkMaterial.cpp
+    src/ChalkMath.cpp
+    src/ChalkMesh.cpp
     src/ChalkResource.cpp
+    src/ChalkScene.cpp
     src/ChalkWindow.cpp
 )
 target_include_directories(CHALKFORGE PRIVATE src)

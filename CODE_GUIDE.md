@@ -66,9 +66,37 @@ CODE_GUIDE.md - CHALKFORGE 코드 가이드
   - `SetResizeCallback(std::function<void(int,int)>)`: 크기 조정 이벤트 등록
   - `Handle()/Width()/Height()`: 창 핸들·클라이언트 크기 조회
 
+### ChalkMath (PHASE 05 확장)
+- **파일**: PHASE 03 최소 헤더(`ChalkMath.h`) → PHASE 05에서 확장 및 `ChalkMath.cpp` 신규 (src/ChalkMath.h/.cpp)
+- **담당**: DirectXMath 별칭(`XMFLOAT2/3/4`, `XMFLOAT4X4`, `XMMATRIX`, `XMVECTOR`) 및 수학 유틸리티 — 각도 변환, 항등 행렬, 행렬 곱/전치/역행렬, 투영·뷰 헬퍼
+- **행렬 규칙**: CPU는 행-우선(row-major), cbuffer 업로드 직전 `XMMatrixTranspose` (DECISIONS.md 참조)
+- **주요 함수**: `DegreesToRadians`/`RadiansToDegrees`, `Identity()`, 전치·역행렬·투영/뷰 변환 헬퍼 (PHASE 05 Step B에서 구현)
+
 ### ChalkCamera
-- **파일**: PHASE 05에 생성 예정
-- **담당**: 카메라 위치, 방향, 뷰/프로젝션 행렬
+- **파일**: PHASE 05에 구현 (src/ChalkCamera.h/.cpp)
+- **담당**: 카메라 위치·타겟·업 벡터, 뷰/프로젝션 행렬 생성, 카메라 이동
+- **주요 메서드**:
+  - `SetPosition`/`SetTarget`/`SetUp`: 카메라 파라미터 설정
+  - `GetViewMatrix()`: `LookAtRH` 기반 뷰 행렬 (우측-handed)
+  - `GetProjectionMatrix()`: FOV/종횡비/근·원 평면 기반 `PerspectiveFovRH` 투영 행렬 (우측-handed)
+  - `GetViewProjectionMatrix()`: 뷰·투영 결합 (셰이더 cbuffer 업로드용)
+  - 카메라 이동: WASD 이동 및 마우스 궤도(orbit)
+
+### ChalkMesh
+- **파일**: PHASE 05에 구현 (src/ChalkMesh.h/.cpp)
+- **담당**: 버텍스/인덱스 버퍼 관리, 서브메쉬(submesh) 구성, 메쉬 로드
+- **주요 메서드**: 버텍스/인덱스 데이터 업로드, `DrawIndexed`용 인덱스 버퍼 뷰, 서브메쉬별 렌더 범위 관리, 정점·인덱스 버퍼 생성
+
+### ChalkMaterial
+- **파일**: PHASE 05에 구현 (src/ChalkMaterial.h/.cpp)
+- **담당**: 머티리얼 Constant Buffer(256-byte 정렬 준수, 색상/방출색/거칠기/금속성 등), 서브셋 ID
+- **주요 메서드**: 머티리얼 파라미터 설정(`SetBaseColor`/`SetEmissive`/`SetRoughness`/`SetMetallic`/`SetSpecularPower`/`SetOpacity`), cbuffer 업로드(`Upload`), 루트 CBV 바인딩(`Bind`)
+- **텍스처**: 텍스처 SRV 슬롯은 텍스처 로더 도입 이후 PHASE로 보류 (PHASE 05에서는 Constant 버퍼만 구현)
+
+### ChalkScene
+- **파일**: PHASE 05에 구현 (src/ChalkScene.h/.cpp)
+- **담당**: 씬 객체 관리(Add/Remove/Get/순회), 조명(Directional light) Constant Buffer
+- **주요 메서드**: `Add`/`Remove`/`Get` 객체 관리, 씬 순회, 조명 CB 업로드, 씬 렌더링 오케스트레이션
 
 ### ChalkBoard
 - **파일**: PHASE 06에 생성 예정
@@ -115,8 +143,11 @@ CHALKFORGE/
 │   ├── ChalkFence.h/.cpp        # PHASE 04 GPU 동기화 펜스
 │   ├── ChalkBarrier.h/.cpp      # PHASE 04 리소스 바리어 도우미
 │   ├── ChalkResource.h/.cpp     # PHASE 04 GPU 리소스 래퍼/수명 추적
-│   ├── ChalkMath.h              # PHASE 03 최소 / PHASE 05 확장 (수학 유틸리티)
-│   ├── ChalkCamera.h/.cpp       # PHASE 05 카메라
+│   ├── ChalkMath.h/.cpp         # PHASE 03 최소 / PHASE 05 확장 (수학 유틸리티)
+│   ├── ChalkCamera.h/.cpp       # PHASE 05 카메라 (뷰/프로젝션, WASD/궤도)
+│   ├── ChalkMesh.h/.cpp         # PHASE 05 메시 (버텍스/인덱스/서브메쉬)
+│   ├── ChalkMaterial.h/.cpp     # PHASE 05 머티리얼 (Constant 버퍼/텍스처)
+│   ├── ChalkScene.h/.cpp        # PHASE 05 씬 객체 관리 + 조명 CB
 │   ├── ChalkBoard.h/.cpp        # PHASE 06 3D 보드
 │   ├── ChalkStroke.h/.cpp       # PHASE 08 스트로크 데이터
 │   ├── ChalkToolSystem.h/.cpp   # PHASE 11 툴 관리

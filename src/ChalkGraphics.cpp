@@ -7,6 +7,8 @@
 
 #include <d3dcompiler.h>
 
+#include <cstddef>
+#include <cstdint>
 #include <cstring>
 #include <cwchar>
 #include <fstream>
@@ -25,9 +27,14 @@ const float kClearColor[4] = { 0.05f, 0.05f, 0.08f, 1.0f };
 
 constexpr DXGI_FORMAT kDepthStencilFormat = DXGI_FORMAT_D32_FLOAT;
 
-struct Vertex {
-    float position[3];
-    float color[4];
+constexpr UINT kRootParameterTransform = 0;
+constexpr UINT kRootParameterMaterial = 1;
+constexpr UINT kRootParameterLight = 2;
+constexpr UINT kTransformStride = D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT;
+
+struct TransformConstants {
+    ChalkMath::XMFLOAT4X4 world;
+    ChalkMath::XMFLOAT4X4 worldViewProj;
 };
 
 std::string WideToUtf8(const std::wstring& text) {
@@ -153,12 +160,13 @@ bool ChalkGraphics::Initialize(HWND hWnd, int width, int height) {
         if (!CreatePipeline()) {
             return false;
         }
-        if (!CreateTriangleGeometry()) {
+        if (!CreateSceneResources()) {
             return false;
         }
 
         width_ = width;
         height_ = height;
+        camera_.SetAspectRatio(static_cast<float>(width) / static_cast<float>(height));
     } catch (const std::exception& e) {
         ChalkLogger::Get().ErrorF("Graphics initialization failed: %s", e.what());
         ReleaseResources();
@@ -293,7 +301,17 @@ bool ChalkGraphics::CreateFence() {
 }
 
 bool ChalkGraphics::CreatePipeline() {
+    D3D12_ROOT_PARAMETER rootParameters[3] = { };
+    for (UINT i = 0; i < 3; ++i) {
+        rootParameters[i].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+        rootParameters[i].Descriptor.ShaderRegister = i;
+        rootParameters[i].Descriptor.RegisterSpace = 0;
+        rootParameters[i].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+    }
+
     D3D12_ROOT_SIGNATURE_DESC rootSignatureDesc = { };
+    rootSignatureDesc.NumParameters = _countof(rootParameters);
+    rootSignatureDesc.pParameters = rootParameters;
     rootSignatureDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
 
     Microsoft::WRL::ComPtr<ID3DBlob> signature;
@@ -315,9 +333,13 @@ bool ChalkGraphics::CreatePipeline() {
     }
 
     D3D12_INPUT_ELEMENT_DESC inputLayout[] = {
-        { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, offsetof(Vertex, position),
+        { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, offsetof(ChalkVertex, position),
           D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-        { "COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, offsetof(Vertex, color),
+        { "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, offsetof(ChalkVertex, normal),
+          D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, offsetof(ChalkVertex, texcoord),
+          D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        { "TANGENT", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, offsetof(ChalkVertex, tangent),
           D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
     };
 
@@ -373,14 +395,8 @@ bool ChalkGraphics::CreatePipeline() {
     return true;
 }
 
-bool ChalkGraphics::CreateTriangleGeometry() {
-    const Vertex vertices[] = {
-        { { 0.0f, 0.5f, 0.0f }, { 1.0f, 0.0f, 0.0f, 1.0f } },
-        { { 0.5f, -0.5f, 0.0f }, { 0.0f, 1.0f, 0.0f, 1.0f } },
-        { { -0.5f, -0.5f, 0.0f }, { 0.0f, 0.0f, 1.0f, 1.0f } },
-    };
-    const UINT bufferSize = sizeof(vertices);
-
+bool ChalkGraphics::CreateUploadBuffer(UINT64 size, const wchar_t* name,
+                                       Microsoft::WRL::ComPtr<ID3D12Resource>& outResource) {
     D3D12_HEAP_PROPERTIES heapProps = { };
     heapProps.Type = D3D12_HEAP_TYPE_UPLOAD;
     heapProps.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
@@ -391,7 +407,7 @@ bool ChalkGraphics::CreateTriangleGeometry() {
     D3D12_RESOURCE_DESC bufferDesc = { };
     bufferDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
     bufferDesc.Alignment = 0;
-    bufferDesc.Width = bufferSize;
+    bufferDesc.Width = size;
     bufferDesc.Height = 1;
     bufferDesc.DepthOrArraySize = 1;
     bufferDesc.MipLevels = 1;
@@ -402,17 +418,97 @@ bool ChalkGraphics::CreateTriangleGeometry() {
 
     FAIL(device_->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &bufferDesc,
                                           D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
-                                          IID_PPV_ARGS(&vertexBuffer_)));
+                                          IID_PPV_ARGS(&outResource)));
+    if (name != nullptr) {
+        outResource->SetName(name);
+    }
+    return true;
+}
 
-    void* mapped = nullptr;
-    const D3D12_RANGE readRange = { 0, 0 };
-    FAIL(vertexBuffer_->Map(0, &readRange, &mapped));
-    memcpy(mapped, vertices, bufferSize);
-    vertexBuffer_->Unmap(0, nullptr);
+bool ChalkGraphics::CreateSceneResources() {
+    const float h = 1.0f;
 
-    vertexBufferView_.BufferLocation = vertexBuffer_->GetGPUVirtualAddress();
-    vertexBufferView_.StrideInBytes = sizeof(Vertex);
-    vertexBufferView_.SizeInBytes = bufferSize;
+    std::vector<ChalkVertex> vertices;
+    std::vector<std::uint32_t> indices;
+    vertices.reserve(24);
+    indices.reserve(36);
+
+    auto pushFace = [&vertices, &indices](const ChalkMath::XMFLOAT3& a,
+                                          const ChalkMath::XMFLOAT3& b,
+                                          const ChalkMath::XMFLOAT3& c,
+                                          const ChalkMath::XMFLOAT3& d,
+                                          const ChalkMath::XMFLOAT3& normal,
+                                          const ChalkMath::XMFLOAT3& tangent) {
+        const std::uint32_t base = static_cast<std::uint32_t>(vertices.size());
+        vertices.push_back({ a, normal, { 0.0f, 1.0f }, tangent });
+        vertices.push_back({ b, normal, { 0.0f, 0.0f }, tangent });
+        vertices.push_back({ c, normal, { 1.0f, 0.0f }, tangent });
+        vertices.push_back({ d, normal, { 1.0f, 1.0f }, tangent });
+        indices.push_back(base + 0);
+        indices.push_back(base + 1);
+        indices.push_back(base + 2);
+        indices.push_back(base + 0);
+        indices.push_back(base + 2);
+        indices.push_back(base + 3);
+    };
+
+    pushFace({ h, -h, -h }, { h, h, -h }, { h, h, h }, { h, -h, h },
+             { 1.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 1.0f });
+    pushFace({ -h, -h, h }, { -h, h, h }, { -h, h, -h }, { -h, -h, -h },
+             { -1.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, -1.0f });
+    pushFace({ -h, h, -h }, { -h, h, h }, { h, h, h }, { h, h, -h },
+             { 0.0f, 1.0f, 0.0f }, { 1.0f, 0.0f, 0.0f });
+    pushFace({ -h, -h, h }, { -h, -h, -h }, { h, -h, -h }, { h, -h, h },
+             { 0.0f, -1.0f, 0.0f }, { 1.0f, 0.0f, 0.0f });
+    pushFace({ -h, -h, h }, { h, -h, h }, { h, h, h }, { -h, h, h },
+             { 0.0f, 0.0f, 1.0f }, { 1.0f, 0.0f, 0.0f });
+    pushFace({ h, -h, -h }, { -h, -h, -h }, { -h, h, -h }, { h, h, -h },
+             { 0.0f, 0.0f, -1.0f }, { -1.0f, 0.0f, 0.0f });
+
+    const ChalkSubmesh submesh = { 0, 36, 0 };
+    if (!cubeMesh_.Create(device_.Get(), vertices.data(),
+                          static_cast<UINT>(vertices.size()), indices.data(),
+                          static_cast<UINT>(indices.size()), &submesh, 1, L"CubeMesh")) {
+        return false;
+    }
+
+    for (UINT i = 0; i < kMaterialCount; ++i) {
+        wchar_t materialName[32] = { };
+        swprintf_s(materialName, L"SceneMaterial[%u]", i);
+        if (!materials_[i].Create(device_.Get(), materialName)) {
+            return false;
+        }
+    }
+    materials_[0].SetBaseColor({ 0.90f, 0.90f, 0.92f, 1.0f });
+    materials_[1].SetBaseColor({ 0.90f, 0.35f, 0.30f, 1.0f });
+    for (UINT i = 0; i < kMaterialCount; ++i) {
+        if (!materials_[i].Upload()) {
+            return false;
+        }
+    }
+
+    const UINT64 objectBufferSize = static_cast<UINT64>(kFrameCount) *
+                                    static_cast<UINT64>(kMaxSceneObjects) * kTransformStride;
+    if (!CreateUploadBuffer(objectBufferSize, L"ObjectConstants", objectConstantBuffer_)) {
+        return false;
+    }
+
+    const UINT64 lightBufferSize = static_cast<UINT64>(kFrameCount) * kTransformStride;
+    if (!CreateUploadBuffer(lightBufferSize, L"LightConstants", lightConstantBuffer_)) {
+        return false;
+    }
+
+    scene_.Clear();
+    scene_.Add(L"CenterCube", &cubeMesh_, &materials_[0]);
+    ChalkSceneObject& offset = scene_.Add(L"OffsetCube", &cubeMesh_, &materials_[1]);
+    DirectX::XMStoreFloat4x4(&offset.world, ChalkMath::Translation(2.2f, 0.0f, 0.0f));
+
+    scene_.Light().direction = { -0.4f, -1.0f, -0.6f, 0.0f };
+
+    camera_.SetPosition({ 3.0f, 2.5f, 5.5f });
+    camera_.SetTarget({ 0.5f, 0.0f, 0.0f });
+    camera_.SetUp({ 0.0f, 1.0f, 0.0f });
+
     return true;
 }
 
@@ -467,8 +563,51 @@ void ChalkGraphics::PopulateCommandList() {
     const D3D12_RECT scissorRect = { 0, 0, width_, height_ };
     commandList_->RSSetScissorRects(1, &scissorRect);
 
-    commandList_->IASetVertexBuffers(0, 1, &vertexBufferView_);
-    commandList_->DrawInstanced(3, 1, 0, 0);
+    const ChalkDirectionalLightConstants lightConstants = scene_.BuildLightConstants();
+    const UINT64 lightOffset = static_cast<UINT64>(frameIndex_) * kTransformStride;
+    void* lightMapped = nullptr;
+    const D3D12_RANGE lightReadRange = { 0, 0 };
+    FAIL(lightConstantBuffer_->Map(0, &lightReadRange, &lightMapped));
+    memcpy(static_cast<std::uint8_t*>(lightMapped) + lightOffset, &lightConstants,
+           sizeof(lightConstants));
+    lightConstantBuffer_->Unmap(0, nullptr);
+    commandList_->SetGraphicsRootConstantBufferView(
+        kRootParameterLight, lightConstantBuffer_->GetGPUVirtualAddress() + lightOffset);
+
+    const ChalkMath::XMMATRIX viewProjection = camera_.GetViewProjectionMatrix();
+    const std::vector<ChalkSceneObject>& objects = scene_.Objects();
+    const UINT objectCount = objects.size() < kMaxSceneObjects
+                                 ? static_cast<UINT>(objects.size())
+                                 : kMaxSceneObjects;
+
+    for (UINT i = 0; i < objectCount; ++i) {
+        const ChalkSceneObject& object = objects[i];
+        if (object.mesh == nullptr || object.material == nullptr) {
+            continue;
+        }
+
+        const ChalkMath::XMMATRIX world = DirectX::XMLoadFloat4x4(&object.world);
+        const ChalkMath::XMMATRIX worldViewProj = ChalkMath::Multiply(world, viewProjection);
+
+        TransformConstants transform = { };
+        transform.world = ChalkMath::ToUploadMatrix(world);
+        transform.worldViewProj = ChalkMath::ToUploadMatrix(worldViewProj);
+
+        const UINT64 transformOffset =
+            (static_cast<UINT64>(frameIndex_) * kMaxSceneObjects + i) * kTransformStride;
+        void* transformMapped = nullptr;
+        const D3D12_RANGE transformReadRange = { 0, 0 };
+        FAIL(objectConstantBuffer_->Map(0, &transformReadRange, &transformMapped));
+        memcpy(static_cast<std::uint8_t*>(transformMapped) + transformOffset, &transform,
+               sizeof(transform));
+        objectConstantBuffer_->Unmap(0, nullptr);
+
+        commandList_->SetGraphicsRootConstantBufferView(
+            kRootParameterTransform,
+            objectConstantBuffer_->GetGPUVirtualAddress() + transformOffset);
+        object.material->Bind(commandList_.Get(), kRootParameterMaterial);
+        object.mesh->Draw(commandList_.Get());
+    }
 
     ChalkBarrier::Transition(
         commandList_.Get(),
@@ -524,6 +663,7 @@ void ChalkGraphics::OnResize(int width, int height) {
 
     width_ = width;
     height_ = height;
+    camera_.SetAspectRatio(static_cast<float>(width) / static_cast<float>(height));
     ChalkLogger::Get().InfoF("Swap chain resized to %dx%d.", width, height);
 }
 
@@ -536,7 +676,13 @@ void ChalkGraphics::Finalize() {
 }
 
 void ChalkGraphics::ReleaseResources() {
-    vertexBuffer_.Reset();
+    objectConstantBuffer_.Reset();
+    lightConstantBuffer_.Reset();
+    cubeMesh_.Reset();
+    for (UINT i = 0; i < kMaterialCount; ++i) {
+        materials_[i].Reset();
+    }
+    scene_.Clear();
     pipelineState_.Reset();
     rootSignature_.Reset();
     commandList_.Reset();
@@ -558,5 +704,4 @@ void ChalkGraphics::ReleaseResources() {
     frameIndex_ = 0;
     width_ = 0;
     height_ = 0;
-    vertexBufferView_ = { };
 }

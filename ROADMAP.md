@@ -105,7 +105,7 @@ ROADMAP.md - CHALKFORGE 개발 로드맵
 ---
 
 ## PHASE 04 — GPU 리소스 관리 및 렌더 파이프라인 안정화
-**상태: 진행 중**
+**상태: 완료**
 **목표**: robust GPU 리소스 관리 및 렌더 파이프라인 패턴
 **구현 범위**:
 - 명령 할당자/목록 기록 패턴 (프레임당)
@@ -143,6 +143,7 @@ ROADMAP.md - CHALKFORGE 개발 로드맵
 ---
 
 ## PHASE 05 — 카메라, 수학, 메시 및 씬 시스템
+**상태: 진행 중** (Step A~G 완료, Step H 카메라 입력 코드 구현 완료 — 입력 동작 육안 확인 대기)
 **목표**: 완전한 수학, 카메라, 메시 및 씬 인프라스트럭처 구현
 **구현 범위**:
 - DirectXMath 통합 (XMVECTOR, XMMATRIX 유형)
@@ -151,7 +152,7 @@ ROADMAP.md - CHALKFORGE 개발 로드맵
 - Perspective projection matrix (FOV, 종횡비, 근/원 플레인)
 - 카메라 이동 (WASD 제어, 마우스 궤도)
 - Mesh 클래스 (버텍스 버퍼, 인덱스 버퍼, 서브메쉬 관리)
-- Material 클래스 (Constant 버퍼, 텍스처 슬롯)
+- Material 클래스 (Constant 버퍼; 텍스처 SRV는 텍스처 로더 도입 이후 PHASE로 보류)
 - 씬 객체 관리 (Add/Remove/Get, 순회)
 - 조명 지원 (Directional light Constant buffer)
 **의존성**: PHASE 04 (GPU 리소스 관리, 렌더 파이프라인)
@@ -163,10 +164,10 @@ ROADMAP.md - CHALKFORGE 개발 로드맵
 - 소스: ChalkScene.h/.cpp (씬 객체 관리)
 - 수정: 기존 파일 (렌더 파이프라인에 수학 유형 통합)
 **기술적 위험**: DirectXMath 정렬 요구 사항 (16-byte); Constant 버퍼 정렬; 행렬 행-major vs column-major
-**학습 목표**: DirectXMath 사용, 카메라 행렬,_mesh 데이터 구조, 머티리얼 Constant 버퍼, 기본 씬 그래프
-**검증 절차**: 카메라 이동 (WASD), 투영 프로브션, 머티리얼이 있는 메쉬 렌더링, 씬 객체 순회
-**수락 기준**: 카메라 제어 가능, 메쉬가 머티리얼로 렌더링됨, 씬 객체 관리 가능
-**미해결 이슈**: 좌표 체계 (row-major vs column-major) 컨벤션 결정
+**학습 목표**: DirectXMath 사용, 카메라 행렬, 메시 데이터 구조, 머티리얼 Constant 버퍼, 기본 씬 그래프
+**검증 절차**: 카메라 이동 (WASD/마우스 궤도 — 코드 구현 완료, 육안 확인 대기), 투영 프로젝션, 머티리얼이 있는 메쉬 렌더링, 씬 객체 순회
+**수락 기준**: 카메라 제어 가능(코드 구현 완료, 입력 동작 육안 확인 대기), 메쉬가 머티리얼로 렌더링됨, 씬 객체 관리 가능
+**미해결 이슈**: 없음 (row-major 저장 + 업로드 시 transpose 컨벤션 확정, DECISIONS.md 참조). 카메라 이동 입력(Step H: WASD/마우스 좌클릭 드래그 궤도)은 코드 구현/빌드/실행 스모크 테스트 완료 — 합성 입력 주입 불가로 입력 동작 육안 확인 대기. D3D12 debug layer validation 메시지 미캡처.
 
 ---
 

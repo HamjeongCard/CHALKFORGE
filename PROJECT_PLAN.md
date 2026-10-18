@@ -47,12 +47,14 @@ PROJECT_PLAN.md - Phase 00 계획
 16. /subsystem:windows CMake 플래그 적용 ✅
 
 ### 진행 중인 작업
-- (없음)
+- PHASE 05: 카메라, 수학, 메시 및 씬 시스템 — Step A~G 완료(사용자 육안 확인 완료), Step H(카메라 이동 입력 연결) 코드 구현/빌드/실행 완료. 입력 동작 육안 확인 대기.
 - (완료) PHASE 01: 프로젝트 구조 및 핵심 기반 — 빌드 시스템/진입점
 - (완료) PHASE 02: Windows 애플리케이션 및 창 관리
 - (완료) PHASE 03: Direct3D 12 초기화 및 기본 렌더링 — 삼각형 렌더링/리사이즈 사용자 육안 확인 완료
-- PHASE 04: GPU 리소스 관리 및 렌더 파이프라인 안정화 (진행 중, 문서 정합화 단계)
-  - 현재 단계: PHASE 04. 상세 계획은 ROADMAP.md / TASKS.md / docs/phases/PHASE_04.md 참조.
+- (완료) PHASE 04: GPU 리소스 관리 및 렌더 파이프라인 안정화 — 빌드/실행 로그 검증, 사용자 동작 확인 완료
+- (완료) PHASE 05: 카메라, 수학, 메시 및 씬 시스템 — 카메라/수학/메시/머티리얼/씬/조명 구현 및 렌더 연결 완료, 사용자 육안 확인 완료 (Step A~G)
+- (진행 중) PHASE 05 후속 Step H: 카메라 이동(WASD/마우스 궤도) 입력 연결 — 코드 구현/빌드/실행 스모크 테스트 완료, 입력 동작 육안 확인 대기
+  - 현재 단계: PHASE 05 Step H 입력 동작 육안 확인 대기 → 다음 단계 PHASE 06. 상세 계획은 ROADMAP.md / TASKS.md / docs/phases/PHASE_05.md 참조.
 
 ### 기술적 위험
 1. **빌드 시스템 선택**: CMake vs. Visual Studio 솔루션 - 조기 결정 필요

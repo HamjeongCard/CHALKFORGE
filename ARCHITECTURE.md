@@ -113,6 +113,8 @@ CHALKFORGE는 C++ 기반의 Direct3D 12 기반 3D 칠판 그리기 프레임워�
 - **ChalkResource**: `ID3D12Resource` 래퍼. 현재 상태 추적, 이름/디버그 태그, CPU 측 핸들 수명 등록·해제 로깅, 깊이 버퍼 생성 도우미
 
 ## 씬 시스템
+> **구현 상태 (PHASE 05)**: 좌표/행렬 컨벤션은 행-우선(row-major) + 업로드 시 `XMMatrixTranspose`로 확정한다(DECISIONS.md의 PHASE 05 결정 참조). `ChalkMath`(수학 유틸리티) → `ChalkCamera`(뷰/투영) → `ChalkMesh`(버텍스/인덱스/서브메쉬) → `ChalkMaterial`(Constant 버퍼) → `ChalkScene`(객체 관리)+조명 순으로 구현하며, `ChalkGraphics`가 이들을 통합한다. 아래 항목은 목표 설계이며 구현 진행에 따라 갱신한다.
+
 ### 수학
 - DirectXMath 라이브러리 사용 (XMVECTOR, XMMATRIX 유형)
 - 행렬 연산 (전치, 곱셈, 역행렬)
@@ -130,8 +132,8 @@ CHALKFORGE는 C++ 기반의 Direct3D 12 기반 3D 칠판 그리기 프레임워�
 - 3D 공간상의 위치
 - 타겟 점 (응시점)
 - 업 벡터
-- 뷰 행렬 계산 (LookToLH 또는 역행렬)
-- 투영 행렬 (시야각, 종횡비, 근/원 플레인)
+- 뷰 행렬 계산 (LookAtRH, 우측-handed)
+- 투영 행렬 (시야각, 종횡비, 근/원 플레인; PerspectiveFovRH, 우측-handed)
 - 카메라 이동 (WASD 제어, 마우스 컨트롤)
 - 카메라 궤도 기능
 
@@ -142,10 +144,10 @@ CHALKFORGE는 C++ 기반의 Direct3D 12 기반 3D 칠판 그리기 프레임워�
 - 서브메쉬 material 할당
 
 ### 머티리얼
-- Constant buffer (머티리얼 색상, 번들리어스 등)
-- 텍스처 매핑 (확산, 법선, 거칠기, 금속성)
+- Constant buffer (머티리얼 색상, 방출색, 거칠기, 금속성 등; 256-byte 정렬)
 - 머티리얼 속성 구조체 정렬 (Constant buffer 요구 사항)
 - 서브셋별 머티리얼 ID
+- 텍스처 매핑 (확산, 법선, 거칠기, 금속성) — 텍스처 로더 도입 이후 PHASE로 보류 (PHASE 05에서는 Constant 버퍼만 구현)
 
 ### 조명
 - 방향성 빛 (방향, 색상, 강도)

@@ -65,7 +65,90 @@ Format:
 - Verified
   - Debug/Release 빌드 성공
   - 실행 로그 확인: 깊이 버퍼 3개 생성(1280x720) 및 정상 종료, ERROR 레벨 로그 없음
-  - 미완료: 삼각형/깊이/리사이즈 사용자 육안 확인
+  - 사용자 동작 확인 완료(삼각형 렌더링 유지/깊이 버퍼/리사이즈) → PHASE 04 완료
+
+### [PHASE 05 STEP B] - 2026-10-19
+- Added
+  - ChalkMath.cpp: DirectXMath 기반 수학 연산 구현 (Multiply/Transpose/Inverse, Translation/Scaling, RotationX/Y/Z/RotationYawPitchRoll, LookAtRH, PerspectiveFovRH, Length/Dot/Cross/Normalize, ToUploadMatrix)
+- Changed
+  - ChalkMath.h: Matrix4x4(전치/곱셈/역행렬/변환)·벡터·투영·업로드 헬퍼 선언 추가 (전부 `noexcept`)
+  - CMakeLists.txt: `ChalkMath.cpp` 소스 추가
+- Verified
+  - Debug/Release 빌드 성공 (`ChalkMath.cpp` 컴파일 및 링크 확인)
+  - 미검증: 런타임 동작 (호출부 없음 → Step C 이후 검증 예정)
+
+### [PHASE 05 STEP C] - 2026-10-19
+- Added
+  - ChalkCamera (.h/.cpp): 위치/타겟/업 기반 카메라. `SetPosition`/`SetTarget`/`SetUp`, `SetPerspective`(fovY/aspect/near/far)·`SetFovY`/`SetAspectRatio`·`SetClipPlanes`, 접근자(`Position`/`Target`/`Up`/`FovYRadians`/`AspectRatio`/`NearZ`/`FarZ`), `GetViewMatrix`(LookAtRH)/`GetProjectionMatrix`(PerspectiveFovRH)/`GetViewProjectionMatrix`, `MoveForward`/`MoveRight`(pan)/`Orbit(yaw,pitch)`
+- Changed
+  - CMakeLists.txt: `ChalkCamera.cpp` 소스 추가
+- Fixed
+  - ChalkCamera.cpp: `DirectX::XMVECTOR`의 `operator+`/`operator-` 미정의(C2676)·`XMStoreFloat3` 인수 오류(C2660) → 이 빌드 구성에서 XMVECTOR 산술 연산자 비활성 → `XMVectorAdd`/`XMVectorSubtract` 명시적 함수로 교체(`ChalkMath.cpp`와 동일 스타일)
+- Verified
+  - Debug/Release 빌드 성공 (`ChalkCamera.cpp` 컴파일 및 링크 확인)
+  - 미검증: 런타임 동작 (호출부 없음 → Step F/G에서 검증 예정)
+
+### [PHASE 05 STEP D] - 2026-10-19
+- Added
+  - ChalkMesh (.h/.cpp): 정점/서브메쉬 기반 메시 관리. `ChalkVertex`(position/normal/texcoord/tangent), `ChalkSubmesh`(indexOffset/indexCount/materialIndex), `ChalkMesh`(`Create`/`Reset`/`IsValid`/`VertexCount`/`IndexCount`/`SubmeshCount`/`GetSubmesh`/`VertexBufferView`/`IndexBufferView`/`Draw`/`DrawSubmesh`)
+- Changed
+  - CMakeLists.txt: `ChalkMesh.cpp` 소스 추가
+- Verified
+  - Debug/Release 빌드 성공 (`ChalkMesh.cpp` 컴파일 및 링크 확인, shaders POST_BUILD 복사 정상)
+  - 미검증: 런타임 동작 (호출부 없음 → Step G에서 검증 예정)
+
+### [PHASE 05 STEP E] - 2026-10-19
+- Added
+  - ChalkMaterial (.h/.cpp): 머티리얼 Constant 버퍼 관리. `ChalkMaterialConstants`(baseColor/emissive `XMFLOAT4`, roughness/metallic/specularPower/opacity `float` = 48바이트, 전부 16-byte 정렬), `ChalkMaterial`(`Create`/`Reset`/`IsValid`/`Constants`/`SetBaseColor`/`SetEmissive`/`SetRoughness`/`SetMetallic`/`SetSpecularPower`/`SetOpacity`/`Upload`/`Bind`)
+  - Constant 버퍼는 UPLOAD 힙에 `D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT`(256바이트) 크기로 생성, `Map`/`memcpy`/`Unmap` 업로드, `Bind(rootParameterIndex)`는 `SetGraphicsRootConstantBufferView`로 루트 CBV 바인딩
+- Changed
+  - CMakeLists.txt: `ChalkMaterial.cpp` 소스 추가
+- Verified
+  - Debug/Release 빌드 성공 (`ChalkMaterial.cpp` 컴파일 및 링크 확인, shaders POST_BUILD 복사 정상)
+  - 미검증: 런타임 동작 (호출부 없음 → Step F에서 루트 서명 CBV 슬롯 추가 후 Step G에서 검증 예정)
+
+### [PHASE 05 STEP F] - 2026-10-19
+- Added
+  - ChalkScene (.h/.cpp): 씬 객체 관리. `ChalkSceneObject`(name + 월드 행렬 `XMFLOAT4X4` + 비소유 `ChalkMesh*`/`ChalkMaterial*`), `ChalkScene`(`Add`/`Remove`/`Clear`/`Get`(이름·인덱스)/`Count`/`Objects`/`Light`/`BuildLightConstants`), `ChalkDirectionalLight`(direction/color/intensity), `ChalkDirectionalLightConstants`(48바이트). D3D12 의존 없음(ChalkMesh/ChalkMaterial 전방 선언)
+  - ChalkGraphics: 씬 통합 렌더 연결. `CreateSceneResources`(큐브 24정점/36인덱스 메시 + 머티리얼 2개 + 카메라·씬 구성), `CreateUploadBuffer(UINT64, name, outResource)`(UPLOAD 힙 업로드 버퍼 헬퍼)
+  - Transform/Material/Light Constant Buffer: Transform b0(per-object `{ world, worldViewProj }` = 128바이트), Material b1(48바이트), Light b2(per-frame 48바이트). object CB = `kFrameCount * kMaxSceneObjects * 256`, light CB = `kFrameCount * 256`
+- Changed
+  - ChalkGraphics.h/.cpp: `vertexBuffer_`/`vertexBufferView_` 제거 → `objectConstantBuffer_`/`lightConstantBuffer_` + `ChalkCamera camera_`/`ChalkScene scene_`/`ChalkMesh cubeMesh_`/`ChalkMaterial materials_[kMaterialCount]` 추가. 루트 서명에 CBV 3슬롯(b0/b1/b2, `D3D12_SHADER_VISIBILITY_ALL`, `RegisterSpace=0`) 추가. PSO 입력 레이아웃을 하드코딩 삼각형에서 `ChalkVertex`(POSITION/NORMAL/TEXCOORD/TANGENT, stride 44)로 교체, `CullMode=NONE`
+  - ChalkGraphics.cpp `PopulateCommandList`: light CB(프레임별) + 씬 순회(per-object Transform CB, `ToUploadMatrix`로 전치 업로드, material `Bind`/mesh `Draw`)로 재작성. `OnResize`에 `camera_.SetAspectRatio` 추가. `ReleaseResources`/`Finalize`에서 CB·메시·머티리얼·씬 해제
+  - shaders/TriangleVS.hlsl, TrianglePS.hlsl: transform(b0)/material(b1)/light(b2) cbuffer 및 Lambert+ambient(0.15)+emissive 조명, `mul(rowVector, matrix)` 형태로 갱신
+  - CMakeLists.txt: `ChalkScene.cpp` 소스 추가
+- Verified
+  - Debug/Release 빌드 성공 (`ChalkScene.cpp` 컴파일 및 링크, shaders POST_BUILD 복사 정상)
+  - 실행 스모크 테스트 통과: `build/Debug/CHALKFORGE.exe` 4초 실행 후 정상 종료(ExitCode=0), 로그 오류 없음(메시 생성 24v/36i, 머티리얼 2개, 초기화/해제 로그)
+  - 미검증: 육안 렌더(씬 큐브 2개 + 방향성 조명) 사용자 확인 대기, D3D12 debug layer validation 메시지 미캡처, 카메라 이동(WASD/궤도) 입력 미구현
+
+### [PHASE 05 STEP G] - 2026-10-19
+- Verified
+  - Debug/Release 빌드 성공(Step F 산출물 기준, 문서화 단계로 코드 변경 없음)
+  - 실행 스모크 테스트 통과(무크래시 종료, 초기화/해제 로그 오류 없음)
+  - 사용자 육안 확인 완료: 씬 큐브 2개(CenterCube/OffsetCube) 정상 표시("큐브 두 개 나온다")
+- Result
+  - PHASE 05 렌더 통합(ChalkMath/ChalkCamera/ChalkMesh/ChalkMaterial/ChalkScene + ChalkGraphics) 검증 완료
+- Remaining (후속 작업)
+  - 카메라 이동(WASD/마우스 궤도) 입력 연결 미구현(정적 카메라)
+  - D3D12 debug layer validation 메시지 파일 로그 미캡처
+
+### [PHASE 05 STEP H] - 2026-10-19
+- Added
+  - ChalkWindow: 키보드/마우스 입력 상태 추적 — `enum MouseButton`(`kMouseLeft=0`/`kMouseRight=1`/`kMouseMiddle=2`/`kMouseButtonCount=3`), 접근자 `IsKeyDown(int)`/`IsMouseButtonDown(int)`/`MousePosition()`/`ConsumeMouseDelta(int&,int&)`(consume+reset), private `ResetInputState()`, 멤버 `keyDown_`/`mouseDown_`/`mousePosition_`/`mouseDeltaX_`/`mouseDeltaY_`/`mouseTracked_`
+  - ChalkWindow: `OnMessage`에 `WM_KEYDOWN`/`WM_KEYUP`, `WM_SYSKEYDOWN`/`WM_SYSKEYUP`, `WM_MOUSEMOVE`(누적 델타, 첫 이동 baseline 스킵), `WM_LBUTTON/RBUTTON/MBUTTONDOWN/UP`(`SetCapture`/`ReleaseCapture`), `WM_SETFOCUS`/`WM_KILLFOCUS` 처리 추가
+  - ChalkApp: QPC(QueryPerformanceCounter) 기반 `ComputeDeltaSeconds()`, 입력 폴링 → 카메라 구동 `UpdateCamera(float)`, idle 콜백 연결
+- Changed
+  - ChalkConfig.h: `kCameraMoveSpeed = 4.0f`(units/sec), `kCameraOrbitSensitivity = 0.006f`(radians/pixel), `kMaxFrameDeltaSeconds = 0.1f`(dt 스파이크 clamp) 상수 추가
+  - ChalkGraphics.h: `ChalkCamera& Camera() noexcept` + const 오버로드 추가(camera_는 private 유지)
+  - ChalkApp.h/.cpp: 타이밍 멤버(`performanceFrequency_`/`lastFrameCounter_`/`hasLastFrameCounter_`) 추가, `#include "ChalkCamera.h"`, `Run()`에서 `QueryPerformanceFrequency`/`QueryPerformanceCounter` 초기화 및 idle 콜백에서 `ComputeDeltaSeconds()` → `UpdateCamera(dt)` → `graphics_->RenderFrame()` 호출, `ComputeDeltaSeconds`/`UpdateCamera` 구현
+- Input Mapping
+  - W/S/A/D → `camera.MoveForward`/`camera.MoveRight`(이동량 = `kCameraMoveSpeed * dt`), 마우스 좌클릭 드래그 → `camera.Orbit(yaw, pitch)`(`yaw = -dx*sens`, `pitch = -dy*sens`)
+- Verified
+  - Debug/Release 빌드 성공
+  - Release 실행 스모크 테스트 통과(4초 이상 실행 유지, D3D12 초기화 로그 정상, 무크래시)
+- Remaining (미검증)
+  - 입력 동작(WASD 이동/좌클릭 드래그 궤도) 사용자 육안 확인 대기(합성 입력 주입 불가로 자동 검증 불가)
 
 ### [Future Phases]
 - To be populated as development progresses.

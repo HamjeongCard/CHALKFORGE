@@ -49,6 +49,68 @@ LRESULT ChalkWindow::OnMessage(UINT message, WPARAM wParam, LPARAM lParam) {
         EndPaint(hWnd_, &ps);
         return 0;
     }
+    case WM_KEYDOWN:
+        if (static_cast<std::size_t>(wParam) < keyDown_.size()) {
+            keyDown_[static_cast<std::size_t>(wParam)] = true;
+        }
+        return 0;
+    case WM_KEYUP:
+        if (static_cast<std::size_t>(wParam) < keyDown_.size()) {
+            keyDown_[static_cast<std::size_t>(wParam)] = false;
+        }
+        return 0;
+    case WM_SYSKEYDOWN:
+        if (static_cast<std::size_t>(wParam) < keyDown_.size()) {
+            keyDown_[static_cast<std::size_t>(wParam)] = true;
+        }
+        return DefWindowProcW(hWnd_, message, wParam, lParam);
+    case WM_SYSKEYUP:
+        if (static_cast<std::size_t>(wParam) < keyDown_.size()) {
+            keyDown_[static_cast<std::size_t>(wParam)] = false;
+        }
+        return DefWindowProcW(hWnd_, message, wParam, lParam);
+    case WM_MOUSEMOVE: {
+        const int x = static_cast<int>(static_cast<short>(LOWORD(lParam)));
+        const int y = static_cast<int>(static_cast<short>(HIWORD(lParam)));
+        if (mouseTracked_) {
+            mouseDeltaX_ += x - mousePosition_.x;
+            mouseDeltaY_ += y - mousePosition_.y;
+        }
+        mousePosition_.x = x;
+        mousePosition_.y = y;
+        mouseTracked_ = true;
+        return 0;
+    }
+    case WM_LBUTTONDOWN:
+        mouseDown_[kMouseLeft] = true;
+        SetCapture(hWnd_);
+        return 0;
+    case WM_LBUTTONUP:
+        mouseDown_[kMouseLeft] = false;
+        ReleaseCapture();
+        return 0;
+    case WM_RBUTTONDOWN:
+        mouseDown_[kMouseRight] = true;
+        SetCapture(hWnd_);
+        return 0;
+    case WM_RBUTTONUP:
+        mouseDown_[kMouseRight] = false;
+        ReleaseCapture();
+        return 0;
+    case WM_MBUTTONDOWN:
+        mouseDown_[kMouseMiddle] = true;
+        SetCapture(hWnd_);
+        return 0;
+    case WM_MBUTTONUP:
+        mouseDown_[kMouseMiddle] = false;
+        ReleaseCapture();
+        return 0;
+    case WM_SETFOCUS:
+        mouseTracked_ = false;
+        return 0;
+    case WM_KILLFOCUS:
+        ResetInputState();
+        return 0;
     default:
         return DefWindowProcW(hWnd_, message, wParam, lParam);
     }
@@ -130,4 +192,33 @@ int ChalkWindow::ProcessMessages(const std::function<void()>& onIdle) {
 
 void ChalkWindow::SetResizeCallback(std::function<void(int, int)> callback) {
     resizeCallback_ = std::move(callback);
+}
+
+bool ChalkWindow::IsKeyDown(int virtualKey) const noexcept {
+    if (virtualKey < 0 || static_cast<std::size_t>(virtualKey) >= keyDown_.size()) {
+        return false;
+    }
+    return keyDown_[static_cast<std::size_t>(virtualKey)];
+}
+
+bool ChalkWindow::IsMouseButtonDown(int button) const noexcept {
+    if (button < 0 || static_cast<std::size_t>(button) >= mouseDown_.size()) {
+        return false;
+    }
+    return mouseDown_[static_cast<std::size_t>(button)];
+}
+
+void ChalkWindow::ConsumeMouseDelta(int& outDeltaX, int& outDeltaY) noexcept {
+    outDeltaX = mouseDeltaX_;
+    outDeltaY = mouseDeltaY_;
+    mouseDeltaX_ = 0;
+    mouseDeltaY_ = 0;
+}
+
+void ChalkWindow::ResetInputState() noexcept {
+    keyDown_.fill(false);
+    mouseDown_.fill(false);
+    mouseDeltaX_ = 0;
+    mouseDeltaY_ = 0;
+    mouseTracked_ = false;
 }

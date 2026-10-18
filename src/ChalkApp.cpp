@@ -1,4 +1,5 @@
 #include "ChalkApp.h"
+#include "ChalkCamera.h"
 #include "ChalkConfig.h"
 #include "ChalkError.h"
 #include "ChalkGraphics.h"
@@ -58,7 +59,13 @@ int ChalkApplication::Run() {
     }
 
     try {
+        QueryPerformanceFrequency(&performanceFrequency_);
+        QueryPerformanceCounter(&lastFrameCounter_);
+        hasLastFrameCounter_ = true;
+
         return window_->ProcessMessages([this]() {
+            const float deltaSeconds = ComputeDeltaSeconds();
+            UpdateCamera(deltaSeconds);
             graphics_->RenderFrame();
         });
     } catch (const std::exception& e) {
@@ -83,6 +90,75 @@ void ChalkApplication::Finalize() {
     ChalkLogger::Get().Shutdown();
 
     initialized_ = false;
+}
+
+float ChalkApplication::ComputeDeltaSeconds() {
+    LARGE_INTEGER now = { };
+    QueryPerformanceCounter(&now);
+
+    if (!hasLastFrameCounter_ || performanceFrequency_.QuadPart <= 0) {
+        lastFrameCounter_ = now;
+        hasLastFrameCounter_ = true;
+        return 0.0f;
+    }
+
+    const double frequency = static_cast<double>(performanceFrequency_.QuadPart);
+    double deltaSeconds = static_cast<double>(now.QuadPart - lastFrameCounter_.QuadPart) / frequency;
+    lastFrameCounter_ = now;
+
+    if (deltaSeconds < 0.0) {
+        deltaSeconds = 0.0;
+    }
+
+    const double maxDeltaSeconds = static_cast<double>(ChalkConfig::kMaxFrameDeltaSeconds);
+    if (deltaSeconds > maxDeltaSeconds) {
+        deltaSeconds = maxDeltaSeconds;
+    }
+
+    return static_cast<float>(deltaSeconds);
+}
+
+void ChalkApplication::UpdateCamera(float deltaSeconds) {
+    if (!window_ || !graphics_) {
+        return;
+    }
+
+    const float moveDistance = ChalkConfig::kCameraMoveSpeed * deltaSeconds;
+
+    float forward = 0.0f;
+    float strafe = 0.0f;
+
+    if (window_->IsKeyDown('W')) {
+        forward += 1.0f;
+    }
+    if (window_->IsKeyDown('S')) {
+        forward -= 1.0f;
+    }
+    if (window_->IsKeyDown('D')) {
+        strafe += 1.0f;
+    }
+    if (window_->IsKeyDown('A')) {
+        strafe -= 1.0f;
+    }
+
+    ChalkCamera& camera = graphics_->Camera();
+
+    if (forward != 0.0f) {
+        camera.MoveForward(forward * moveDistance);
+    }
+    if (strafe != 0.0f) {
+        camera.MoveRight(strafe * moveDistance);
+    }
+
+    int deltaX = 0;
+    int deltaY = 0;
+    window_->ConsumeMouseDelta(deltaX, deltaY);
+
+    if (window_->IsMouseButtonDown(ChalkWindow::kMouseLeft) && (deltaX != 0 || deltaY != 0)) {
+        const float yaw = -static_cast<float>(deltaX) * ChalkConfig::kCameraOrbitSensitivity;
+        const float pitch = -static_cast<float>(deltaY) * ChalkConfig::kCameraOrbitSensitivity;
+        camera.Orbit(yaw, pitch);
+    }
 }
 
 void ChalkApplication::OnResize(int width, int height) {

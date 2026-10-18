@@ -257,11 +257,11 @@ DECISIONS.md - CHALKFORGE 기술 결정사항
 - 상수 변환 매트릭스 필요
 - 샘플 코드 불일치
 
-**결정 후속 조치**:
+**결정 후속 조치** (2026-10-19 갱신: 완전 우측-handed로 통일):
 - 모든 행렬: DirectXMath XMMATRIX 연산
-- 투영: PerspectiveLH 또는 PerspectiveFovLH (left-handed projection but right-handed world)
-- 뷰: LookLH 또는 Inverse(LookToLH)
-- 전체적으로 일관된 사용; 좌표계 혼합 금지
+- 투영: PerspectiveFovRH
+- 뷰: LookAtRH
+- 전체적으로 우측-handed로 일관된 사용; 좌표계 혼합 금지 (RH 월드 + RH 뷰/투영)
 
 ---
 
@@ -370,6 +370,32 @@ DECISIONS.md - CHALKFORGE 기술 결정사항
 
 ---
 
+## PHASE 05 — 카메라/수학/메시/씬 시스템 결정
+### 결정: 행렬은 행-우선(row-major) + 업로드 시 XMMatrixTranspose
+**날짜**: 2026-10-19
+
+**선택된 대안**: DirectXMath 기본 레이아웃 유지 + 업로드 전 전치 vs. HLSL cbuffer에 `row_major` 키워드 사용 vs. 자체 column-major 행렬 클래스 구현
+
+**선택된 내용**: DirectXMath의 기본 저장 레이아웃(행-우선, `XMFLOAT4X4`가 행 단위 저장)을 그대로 사용한다. CPU에서 `XMMATRIX`로 world/view/projection을 계산·곱한 뒤, Constant Buffer(머티리얼/조명/변환)에 업로드하기 직전에 `XMMatrixTranspose()`로 전치하여 HLSL이 기대하는 column-major 메모리 레이아웃과 맞춘다. `ChalkMath`에 전치·업로드 헬퍼를 두어 이 규칙을 한 곳에서 강제한다.
+
+**선택 이유**:
+- DirectXMath는 row-major를 기본으로 하며 `XMMatrixTranspose`를 제공하므로 변환이 저렴하고 표준적임
+- 다수 공식 D3D12 샘플 및 `DirectX::XMMatrix*` 관례와 일치하여 학습 자료·샘플 코드 재사용이 쉬움
+- HLSL cbuffer 기본 패킹은 column-major이므로, 업로드 직전 한 지점에서만 전치하면 CPU 연산 코드는 row-major로 일관 유지 가능
+- PHASE 05 문서 단계에서 확정하므로 되돌리기 비용이 낮음
+
+**거부된 대안**:
+- HLSL cbuffer `row_major` 키워드 — 셰이더마다 키워드를 강제해야 하고 유니폼한 규칙이 흩어짐
+- 자체 column-major 행렬 클래스 — DirectXMath/HLSL 내장 함수·샘플과의 정합이 깨지고 학습 부담 증가
+
+**영향**: `src/ChalkMath.h/.cpp`(전치/업로드 헬퍼), `src/ChalkCamera.h/.cpp`(뷰/프로젝션), `src/ChalkMaterial.h/.cpp`·`src/ChalkScene.h/.cpp`(cbuffer 업로드 지점), 모든 `*VS.hlsl`/`*PS.hlsl`의 cbuffer 행렬 레이아웃
+
+**비고**: 기존 `## 좌표 컨벤션`(Y-up 우측 좌표계) 결정과는 별개로, 본 결정은 "행렬의 메모리 저장 레이아웃(행-우선 vs 열-우선)"을 다룬다. 두 결정을 함께 적용하면: 우측 Y-up 월드/뷰 좌표계 + row-major CPU 계산 + 업로드 시 전치.
+
+**handedness 확정 (2026-10-19)**: `## 좌표 컨벤션`의 후속 조치에 남아 있던 LH 표기(PerspectiveLH/LookLH 등)를 제거하고 **완전 우측-handed(RH 월드 + RH 뷰/투영)로 통일**한다. 뷰는 `XMMatrixLookAtRH`, 투영은 `XMMatrixPerspectiveFovRH`를 사용한다. 이에 따라 ARCHITECTURE.md·CODE_GUIDE.md의 관련 표기도 `LookAtRH`/`PerspectiveFovRH`로 정정하였다.
+
+---
+
 ## 주요 결정 사항 요약
 
 | 카테고리 | 결정 | 타당성 |
@@ -386,8 +412,9 @@ DECISIONS.md - CHALKFORGE 기술 결정사항
 | 입력 | WM_MOUSEMOVE 샘플링 | 단순성, 그리기에 충분 |
 | 창 | 손수 만든 Win32 | 완전한 제어, 경량 |
 | 수학 | DirectXMath | 추가 종속성 없음, HLSL 통합 |
+| 행렬 레이아웃 | 행-우선 + 업로드 시 XMMatrixTranspose | DirectXMath/샘플 정합, HLSL cbuffer 일치 |
 | 형식 | 사용자 정의 바이너리 | 빠름, 작음, 버전화됨 |
 | Undo/Redo | 명령 패턴 | 세부 단위, 메모리 효율적 |
 | 좌표 | 우측 Y-up | DirectXMath 기본값, HLSL 일관성 |
 
-**다음 결정 지점**: PHASE 05 - 카메라/뷰 행렬 및 스트로크 기하학 표현 방식 검증; PHASE 08 - 렌더링 전략 선택 검증.
+**다음 결정 지점**: PHASE 05 - 스트로크 기하학 표현 방식 검증 (카메라/뷰 행렬 및 행렬 레이아웃은 확정); PHASE 08 - 렌더링 전략 선택 검증.

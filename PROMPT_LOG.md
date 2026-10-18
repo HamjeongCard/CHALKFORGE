@@ -555,11 +555,45 @@ PHASE 01의 구현은 다음 지시를 기다린다.
 검증 절차:
 - Debug/Release 빌드 성공 여부 확인 (완료)
 - 실행 파일 무크래시 실행 및 chalkforge.log 확인 (완료, ERROR 없음)
-- 삼각형 + 깊이 + 리사이즈 육안 확인 (사용자 확인 대기)
+- 삼각형 + 깊이 + 리사이즈 사용자 동작 확인 (완료, 사용자 보고 "작동 정상")
+
+결과: PHASE 04 Step A~G 완료. 사용자 동작 확인 완료로 PHASE 04 완료 처리.
 
 미해결 사항:
-- 사용자 육안 확인(삼각형/깊이/리사이즈) 미완료 — 확인 전 PHASE 04 완료 표기 금지
 - 텍스처 등 추가 GPU 리소스는 이후 단계에서 진행
+
+## PHASE 05 프롬프트 — Camera, Math, Mesh & Scene System
+
+프롬프트 ID: PROMPT-0005
+날짜: 2026-10-19
+개발 단계: PHASE 05 - 카메라, 수학, 메시 및 씬 시스템
+
+핵심 지시:
+- 수학/카메라/메시/머티리얼/씬/조명을 단계적으로 구현한다.
+- 좌표계 handedness(좌/우)와 행렬 컨벤션(row-major vs column-major)을 먼저 확정하고 문서화한다.
+- 빌드 성공 / 실제 실행 / 화면 출력 확인을 구분하고, 미확인 항목은 완료로 표기하지 않는다.
+
+구현 완료 결과:
+- Step A: 문서 정합화 — ROADMAP/TASKS/PROJECT_PLAN/ARCHITECTURE/DECISIONS/CODE_GUIDE 갱신, docs/phases/PHASE_05.md 생성. 행렬 컨벤션(row-major CPU 계산 + 업로드 시 XMMatrixTranspose) 결정·기록.
+- handedness 확정: 완전 우측-handed로 통일(LookAtRH + PerspectiveFovRH). DECISIONS.md(260-264, 393)·ARCHITECTURE.md(135-136)·CODE_GUIDE.md(80-81) LH 표기 정정.
+- Step B: ChalkMath 확장 — ChalkMath.h에 Matrix4x4(전치/곱셈/역행렬/변환)·벡터·투영·업로드 헬퍼 선언 추가, ChalkMath.cpp 신규 구현(DirectXMath), CMakeLists.txt에 소스 추가.
+- Step C: ChalkCamera 구현 — ChalkCamera.h/.cpp 신규(위치/타겟/업, 뷰 LookAtRH·투영 PerspectiveFovRH 행렬, MoveForward/MoveRight(pan)/Orbit), CMakeLists.txt에 소스 추가.
+  - 최초 Debug 빌드 실패: DirectX::XMVECTOR의 operator+/- 미정의(C2676)·XMStoreFloat3 인수 오류(C2660) → 이 빌드 구성에서 XMVECTOR 산술 연산자 비활성 → XMVectorAdd/XMVectorSubtract 명시적 함수로 교체(ChalkMath.cpp와 동일 스타일), 재빌드 성공.
+- Step D: ChalkMesh 구현 — ChalkMesh.h/.cpp 신규(정점/서브메쉬 기반 메시: ChalkVertex(position/normal/texcoord/tangent), ChalkSubmesh(indexOffset/indexCount/materialIndex), UPCONSTANT 업로드 버퍼로 정점/인덱스 버퍼 생성, Draw/DrawSubmesh로 IA 바인딩+DrawIndexedInstanced), CMakeLists.txt에 소스 추가.
+- Step E: ChalkMaterial 구현 — ChalkMaterial.h/.cpp 신규(머티리얼 Constant 버퍼: ChalkMaterialConstants(baseColor/emissive/roughness/metallic/specularPower/opacity, 48바이트, 전부 16-byte 정렬), UPLOAD 힙에 256바이트 CB 생성, Map/memcpy/Unmap 업로드, Bind(rootParameterIndex)로 루트 CBV 바인딩), CMakeLists.txt에 소스 추가. 텍스처 SRV는 텍스처 로더 도입 이후 PHASE로 보류.
+- Step F: ChalkScene + 렌더 통합 — ChalkScene.h/.cpp 신규(참조 기반 씬 객체 모델: ChalkSceneObject=name/world(XMFLOAT4X4)/비소유 mesh·material, ChalkScene의 Add/Remove/Clear/Get/Count/Objects/Light/BuildLightConstants, ChalkDirectionalLight + ChalkDirectionalLightConstants 48바이트). shaders/TriangleVS.hlsl·TrianglePS.hlsl 신규(transform b0/material b1/light b2 cbuffer, mul(rowVector, matrix), Lambert+ambient+emissive). ChalkGraphics.h/.cpp에 프레임당/오브젝트당 CB 링(object/light), 루트 서명 CBV 3슬롯(b0/b1/b2), PSO 입력 레이아웃을 ChalkVertex(stride 44)로 교체, 씬 순회 기반 드로우(월드 행렬 + VP 곱 + ToUploadMatrix 전치 업로드 + material->Bind + mesh->Draw) 연결. CMakeLists.txt에 ChalkScene.cpp 추가.
+- Step H: 카메라 입력 연결 — ChalkConfig.h에 이동속도(kCameraMoveSpeed=4.0f)/궤도감도(kCameraOrbitSensitivity=0.006f)/최대 dt(kMaxFrameDeltaSeconds=0.1f) 상수 추가. ChalkWindow.h/.cpp에 키/마우스 입력 상태 추적(MouseButton enum, IsKeyDown/IsMouseButtonDown/MousePosition/ConsumeMouseDelta, ResetInputState, WM_KEY*/WM_SYSKEY*/WM_MOUSEMOVE/WM_*BUTTON*(SetCapture/ReleaseCapture)/WM_SETFOCUS/WM_KILLFOCUS). ChalkGraphics.h에 Camera() 접근자. ChalkApp.h/.cpp에 QPC 타이밍(performanceFrequency_/lastFrameCounter_/hasLastFrameCounter_)·ComputeDeltaSeconds()·UpdateCamera(float) 추가, Run() 초기화 및 idle 콜백에서 ComputeDeltaSeconds→UpdateCamera→RenderFrame 순서 호출(입력 매핑: W/S/A/D→MoveForward/MoveRight, 좌클릭 드래그→Orbit). Debug/Release 빌드 성공, Release 실행 스모크 테스트 통과(4초 유지·무크래시). 입력 동작(WASD/좌클릭 드래그)은 사용자 육안 확인 대기.
+
+검증 절차:
+- Debug/Release 빌드 성공 여부 확인 (Step B: 완료, Step C: 완료, Step D: 완료, Step E: 완료, Step F: 완료)
+- 런타임 스모크 테스트(Step F): build\Debug\CHALKFORGE.exe 실행 → ExitCode=0, 로그에 메시 생성(24 정점/36 인덱스/1 서브메쉬)·머티리얼 생성(256바이트 CB/48바이트 payload) 2회·D3D12 초기화·정상 종료 확인. D3D12 오류/크래시 없음.
+- 사용자 육안 확인(Step G): 씬 큐브 2개(CenterCube/OffsetCube) + 방향성 조명 렌더링 정상 표시 확인 완료.
+- 미검증: D3D12 debug layer validation 메시지는 OutputDebugString으로 출력되어 로그에 미캡처. 카메라 이동(WASD/마우스 궤도) 미구현.
+
+미해결 사항:
+- Step G(검증+문서화) 완료: CHANGELOG/TEST_LOG/TASKS/PROMPT_LOG/PROJECT_PLAN/ROADMAP/docs(phases/PHASE_05) 갱신. 화면 출력 육안 확인(큐브 2개 + 방향성 조명) 완료로 PHASE 05 Step A~G 완료 처리.
+- Step H(카메라 입력 연결) 코드 구현 완료: ChalkConfig 상수, ChalkWindow 입력 추적, ChalkGraphics Camera() 접근자, ChalkApp QPC delta time·UpdateCamera·idle 콜백 연결. Debug/Release 빌드 성공, Release 실행 스모크 테스트 통과(4초 유지·무크래시). 입력 동작(WASD 이동/좌클릭 드래그 궤도)은 사용자 육안 확인 대기 — 합성 입력 주입이 불가하여 자동 검증 불가. PHASE 05 수락 기준 2(카메라 제어 가능)는 육안 확인 전까지 완료 항목에서 대기 상태로 유지.
+- D3D12 debug layer validation 경고/오류 로그 캡처 미확인(런타임 로그는 앱 자체 메시지만 기록)
 
 ## FINAL PRINCIPLE
 
