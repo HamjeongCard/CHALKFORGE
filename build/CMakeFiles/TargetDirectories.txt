@@ -1,3 +1,0 @@
-C:/Users/Hamje/OneDrive/Desktop/프로그래밍/3학년 2학기/다이렉트X/중간고사/CHALKFORGE/build/CMakeFiles/CHALKFORGE.dir
-C:/Users/Hamje/OneDrive/Desktop/프로그래밍/3학년 2학기/다이렉트X/중간고사/CHALKFORGE/build/CMakeFiles/ALL_BUILD.dir
-C:/Users/Hamje/OneDrive/Desktop/프로그래밍/3학년 2학기/다이렉트X/중간고사/CHALKFORGE/build/CMakeFiles/ZERO_CHECK.dir

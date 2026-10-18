@@ -20,19 +20,21 @@ ROADMAP.md - CHALKFORGE 개발 로드맵
 - 구성 시스템 생성 (기본값, 가능한 설정 파일 지원)
 - 기본형 및 수학 유틸리티 래퍼 생성
 **의존성**: 독립적 (기초 단독)
+**상태: 부분 완료** — 빌드 시스템과 진입점만 구현되었고, 나머지 기반 파일은 PHASE 03에서 구현한다.
 **생성/수정할 파일**:
-- CMakeLists.txt (또는 .sln 프로젝트 파일)
-- 소스: ChalkApp.h/.cpp (애플리케이션 진입, 창 클래스)
-- 소스: ChalkLogger.h/.cpp (로깅 시스템)
-- 소스: ChalkError.h/.cpp (오류 처리)
-- 소스: ChalkConfig.h (구성 기본값)
-- 소스: ChalkMath.h (수학 유틸리티)
+- CMakeLists.txt (Visual Studio 2022 generator로 빌드, .sln은 CMake가 생성) — 구현 완료
+- 소스: ChalkApp.cpp (Win32 진입점) — 구현 완료
+- 소스: ChalkApp.h (애플리케이션 클래스 선언) — PHASE 03에서 구현
+- 소스: ChalkLogger.h/.cpp (로깅 시스템) — PHASE 03에서 구현
+- 소스: ChalkError.h/.cpp (오류 처리) — PHASE 03에서 구현
+- 소스: ChalkConfig.h (구성 기본값) — PHASE 03에서 구현
+- 소스: ChalkMath.h (수학 유틸리티, PHASE 05 확장) — PHASE 03에서 최소 구현
 - 업데이트: PROMPT_LOG.md (PHASE 01 시작 기록)
 **기술적 위험**: 빌드 시스템 선택 (CMake vs. VS 솔루션)은 후속 단계에 영향
 **학습 목표**: CMakeLists.txt 구조 for D3D12, Win32 애플리케이션 기초, 기본 C++ 프로젝트 설정
-**검증 절차**: 프로젝트 성공적으로 빌드 (빈 창 표시), 로거 출력 확인, 오류 처리 확인
-**수락 기준**: 프로젝트 빌드 및 실행, 제목 "CHALKFORGE"가 있는 빈 창 표시, 로거 활성화
-**미해결 이슈**: CMake vs. VS 솔루션 결정, 서브시스템 (Windows vs. Console) 정의
+**검증 절차**: 프로젝트 성공적으로 빌드 (빈 창 표시). 로거/오류 처리 검증은 PHASE 03으로 이동
+**수락 기준**: 프로젝트 빌드 및 실행, 제목 "CHALKFORGE"가 있는 빈 창 표시 (로거 활성화는 PHASE 03으로 이동)
+**미해결 이슈**: CMake vs. VS 솔루션 결정(→CMake 확정), 서브시스템 (Windows vs. Console) 정의(→/subsystem:windows 확정)
 
 ---
 
@@ -60,33 +62,45 @@ ROADMAP.md - CHALKFORGE 개발 로드맵
 ---
 
 ## PHASE 03 — Direct3D 12 초기화 및 기본 렌더링
+**상태: 진행 중 (문서 정합화 단계)**
 **목표**: 핵심 D3D12 디바이스, 명령 큐, 스왑 체인 생성 및 첫 번째 삼각형
 **구현 범위**:
+- 누락된 PHASE 01 기반 파일 정식 구현 (ChalkLogger, ChalkError, ChalkConfig, ChalkMath, ChalkApp.h) — PHASE 03에 필요한 최소 범위만
 - D3D12 디바이스 생성 (기능 수준 선택, 사용 가능한 경우 디버그 레이어)
 - DXGI 스왑 체인 생성 (버퍼 수, 형식, 창과의 연결)
 - 명령 큐 생성 (직접 유형)
-- 명령 할당자 및 명령 목록 생성
+- 명령 할당자 및 명령 목록 생성 (프레임당 1개)
 - RTV 기술 힙 생성 (스왑 체인 버퍼 수)
-- 클리어 색상 및 뷰포트 설정
-- 기본 렌더 루프와 첫 번째 D3D12 삼각형 렌더링
-- 프레임 리소스 관리 (할당자당 프레임)
+- 루트 서명 및 삼각형용 PSO 생성
+- 버텍스 버퍼 및 기본 렌더 루프 (클리어 + 삼각형 드로우)
+- 펜스 기반 GPU 동기화 및 크기 조정 시 리소스 재생성
+- 셰이더는 실행 시 d3dcompiler로 컴파일 (shaders/*.hlsl)
+
+**구조 결정**: PHASE 03의 D3D12 자원(디바이스, 큐, 할당자, 명령 목록, 스왑 체인, RTV 힙, 루트 서명, PSO)은 단일 `ChalkGraphics` 클래스로 구현하고 내부에 캡슐화한다. 세부 자원별 파일 분리는 이후 단계(예: PHASE 04)에서 필요 시 수행한다. (DECISIONS.md 참조)
+
+**내부 검증 단계** (PHASE 03은 각 항목을 개별 검증하며, 미확인 항목은 완료로 표기하지 않음):
+1. D3D12 초기화 — 디바이스/큐/스왑 체인 생성 성공
+2. 백 버퍼 RTV 및 클리어 — 단색 배경 표시
+3. 파이프라인 — 루트 서명/PSO/셰이더 컴파일 성공
+4. 삼각형 렌더링 — 삼각형이 화면에 표시됨
+5. GPU 동기화 — 펜스로 프레임 간 자원 재사용 안전
+6. 리사이즈 — 창 크기 변경 시 정상 재생성/렌더링
+
 **의존성**: PHASE 02 (창 관리)
 **생성/수정할 파일**:
-- 소스: ChalkDevice.h/.cpp (D3D12 디바이스 관리)
-- 소스: ChalkCmdQueue.h/.cpp (명령 큐)
-- 소스: ChalkCmdAllocator.h/.cpp (명령 할당자)
-- 소스: ChalkCmdList.h/.cpp (명령 목록)
-- 소스: ChalkSwapChain.h/.cpp (스왑 체인 관리)
-- 소스: ChalkRenderTarget.h/.cpp (RTV 힙 및 백 버퍼)
-- 소스: ChalkRootSignature.h/.cpp (기본 루트 서명)
-- 소스: ChalkPipelineState.h/.cpp (삼각형용 PSO)
-- 소스: ChalkTriangle.h/.cpp (버텍스 버퍼, 인덱스 버퍼)
-- 업데이트: CMakeLists.txt (새 소스 파일 추가)
-**기술적 위험**: D3D12 초기화 순서는 결정적임; 누락된 디바이스 생성 플래그; 기능 수준 불일치
-**학습 목표**: D3D12 디바이스 생성, 명령 큐/목록/할당자 패턴, 스왑 체인, RTV 힙, 기본 렌더 루프, 버텍스 버퍼
-**검증 절차**: 빌드 성공, 창 표시, 첫 번째 삼각형 스왑 체인 백 버퍼에 렌더링
-**수락 기준**: 삼각형이 D3D12 스왑 체인에 올바르게 렌더링됨, 크기 조정 처리 작동
-**미해결 이슈**: 멀티샘플링 설정, 스왑 체인 버포맷 결정
+- 소스: ChalkGraphics.h/.cpp (D3D12 디바이스/큐/할당자/목록/스왑 체인/RTV/루트 서명/PSO 통합 관리)
+- 소스: ChalkApp.h/.cpp (ChalkApplication/ChalkWindow로 리팩터링, UNICODE + Per-Monitor V2 DPI)
+- 소스: ChalkLogger.h/.cpp (OutputDebugString + 파일 로깅)
+- 소스: ChalkError.h/.cpp (HRESULT 확인, FAIL 매크로)
+- 소스: ChalkConfig.h (구성 기본값)
+- 소스: ChalkMath.h (DirectXMath 래퍼 — PHASE 03 최소 범위)
+- 셰이더: shaders/TriangleVS.hlsl, shaders/TrianglePS.hlsl (실행 시 컴파일)
+- 수정: CMakeLists.txt (D3D12/DXGI/d3dcompiler 링크, 새 소스 추가)
+**기술적 위험**: D3D12 초기화 순서는 결정적임; 누락된 디바이스 생성 플래그; 기능 수준 불일치; 리사이즈 동기화 누락 시 크래시
+**학습 목표**: D3D12 디바이스 생성, 명령 큐/목록/할당자 패턴, 스왑 체인, RTV 힙, 루트 서명/PSO, 버텍스 버퍼, 펜스 동기화
+**검증 절차**: 빌드 성공(Debug/Release), 창 표시, 삼각형 렌더링(사용자 육안 확인), 리사이즈 동작 확인
+**수락 기준**: 삼각형이 D3D12 스왑 체인에 올바르게 렌더링됨(사용자 확인), 크기 조정 처리 작동
+**미해결 이슈**: 멀티샘플링 설정, 스왑 체인 버퍼 형식 최종 결정(기본 R8G8B8A8_UNORM)
 
 ---
 

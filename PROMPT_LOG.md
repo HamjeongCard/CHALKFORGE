@@ -504,6 +504,34 @@ PHASE 01의 구현은 다음 지시를 기다린다.
 - Direct3D 12 초기화 및 렌더링 연계 (PHASE 03)
 - 입력 메시지 처리 (키보드, 마우스) (PHASE 03~07)
 
+## PHASE 03 프롬프트 — Direct3D 12 Initialization & Basic Rendering
+
+프롬프트 ID: PROMPT-0003
+날짜: 2026-10-19
+개발 단계: PHASE 03 - Direct3D 12 Initialization & Basic Rendering
+
+핵심 지시:
+- Direct3D 12 초기화, DXGI 스왑 체인, 렌더 파이프라인, 삼각형 렌더링, GPU 동기화, 리사이즈를 단계적으로 구현한다.
+- 빌드 성공 / 실제 실행 / 화면 출력 확인을 구분하여 기록한다.
+- 각 단계는 문서 정합화 후 구현하고 검증 결과를 보고한다.
+
+구현 완료 결과 (Step A~F):
+- Step A: 문서 정합화 (ROADMAP/CODE_GUIDE/TASKS/DECISIONS/PROJECT_PLAN)
+- Step B: build/ Git 추적 해제 및 .gitignore에 build/ 추가
+- Step C: PHASE 01 기반 파일 구현 (ChalkLogger, ChalkError, ChalkConfig, ChalkMath, ChalkApp.h)
+- Step D: CMake 확장 (d3d12/dxgi/d3dcompiler, /utf-8, Debug 디버그 레이어)
+- Step E: ChalkWindow 분리 및 UNICODE + Per-Monitor V2 DPI 적용
+- Step F: ChalkGraphics 구현 (디바이스/큐/스왑 체인/RTV/루트 서명/PSO/정점 버퍼/펜스/리사이즈), Debug/Release 빌드 성공 및 실행 무크래시 확인
+
+검증 절차:
+- Debug/Release 빌드 성공 여부 확인
+- 실행 파일 무크래시 실행 및 chalkforge.log 확인
+- 삼각형 화면 출력 및 리사이즈 동작 육안 확인 (사용자 확인 필요)
+
+미해결 사항:
+- 삼각형 화면 출력 및 리사이즈 동작 육안 확인 미완료
+- 깊이 버퍼, 텍스처 등 추가 GPU 리소스는 PHASE 04에서 진행
+
 ## FINAL PRINCIPLE
 
 Design → Explain → Implement → Analyze → Validate → Document → Review → Advance

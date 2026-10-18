@@ -24,8 +24,9 @@ PROJECT_PLAN.md - Phase 00 계획
 - [x] Phase 00 완료 보고서 생성 완료
 
 ### 의존성
-- Phase 00 완료 (CMake 빌드 시스템 구축 완료)
-- Phase 01 완료 (윈도우 애플리케이션 프레임워크 및 Win32 창 생성 완료)
+- Phase 00 완료 (요구사항/아키텍처/로드맵/문서 시스템)
+- Phase 01 부분 완료 (CMake 빌드 시스템, 애플리케이션 진입점; 기반 파일은 PHASE 03에서 구현)
+- Phase 02 완료 (Win32 창 생성 및 메시 펌프)
 
 ### 완료된 작업
 1. 현재 디렉토리 및 git 저장소 조사 ✅
@@ -46,8 +47,10 @@ PROJECT_PLAN.md - Phase 00 계획
 16. /subsystem:windows CMake 플래그 적용 ✅
 
 ### 진행 중인 작업
-- PHASE 01: 프로젝트 구조 및 핵심 기반 (완료)
-- PHASE 02: Windows 애플리케이션 및 창 관리 (완료)
+- PHASE 03: Direct3D 12 초기화 및 기본 렌더링 (진행 중, 문서 정합화 단계)
+  - 현재 단계: PHASE 03. 상세 계획은 ROADMAP.md / TASKS.md 참조. 이 문서는 PHASE 00 기록이며 이후 단계 완료 시 갱신한다.
+- (완료) PHASE 01: 프로젝트 구조 및 핵심 기반 — 빌드 시스템/진입점
+- (완료) PHASE 02: Windows 애플리케이션 및 창 관리
 
 ### 기술적 위험
 1. **빌드 시스템 선택**: CMake vs. Visual Studio 솔루션 - 조기 결정 필요

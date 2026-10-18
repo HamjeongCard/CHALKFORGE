@@ -33,5 +33,23 @@ Format:
 - CMakeLists.txt /subsystem:windows 플래그 적용, Windows GUI 애플리케이션 설정
 - "CHALKFORGE" 제목의 창 성공적 표시 및 닫기 검증
 
+### [PHASE 03 IMPLEMENTATION] - 2026-10-19
+- Added
+  - ChalkConfig.h: 창/스왑 체인/로그 관련 상수 (kWindowTitle, kDefaultWindowWidth/Height, kFrameCount 등)
+  - ChalkLogger (.h/.cpp): 레벨별 로깅, OutputDebugStringA + 파일 로그, InfoF/ErrorF 등 포맷 헬퍼
+  - ChalkError (.h/.cpp): ChalkFormatHResult, ChalkException, FAIL/THROW_IF_FAILED 매크로
+  - ChalkMath.h: DirectXMath 별칭, kPi, DegreesToRadians/RadiansToDegrees, Identity
+  - ChalkApp.h: ChalkApplication 클래스 및 wWinMain 진입점 선언
+  - ChalkWindow (.h/.cpp): CreateWindowExW 기반 창 생성, ProcessMessages(onIdle) 메시지 처리
+  - ChalkGraphics (.h/.cpp): D3D12 디바이스/커맨드 큐/스왑 체인/기술 힙/루트 서명/PSO/정점 버퍼/펜스 동기화/리사이즈
+  - shaders/TriangleVS.hlsl, shaders/TrianglePS.hlsl: 삼각형 렌더링 셰이더
+- Changed
+  - ChalkApp.cpp: ChalkApplication으로 리팩터링, 그래픽스 연계 및 렌더 루프 구성, Per-Monitor V2 DPI 적용
+  - CMakeLists.txt: ChalkGraphics.cpp 추가, d3d12/dxgi/d3dcompiler 링크, NOMINMAX/UNICODE, /utf-8, /subsystem:windows, Debug CHALK_DEBUG_LAYER, 셰이더 POST_BUILD 복사
+- Fixed
+  - C4244(wide→narrow) 경고: ChalkGraphics.cpp 내부 WideToUtf8 헬퍼로 셰이더 경로 변환
+- Removed
+  - build/ 디렉터리 Git 추적 해제 (git rm -r --cached build, .gitignore에 build/ 추가)
+
 ### [Future Phases]
 - To be populated as development progresses.

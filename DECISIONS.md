@@ -265,12 +265,69 @@ DECISIONS.md - CHALKFORGE 기술 결정사항
 
 ---
 
+## PHASE 03 — D3D12 구조 및 기반 결정
+### 결정: D3D12 자원을 단일 `ChalkGraphics` 클래스로 캡슐화
+**날짜**: 2026-10-18
+
+**선택된 대안**: 단일 통합 클래스 vs. 자원별 개별 클래스 (ChalkDevice, ChalkCmdQueue 등 9개)
+
+**선택된 내용**: PHASE 03의 디바이스, 명령 큐, 명령 할당자/목록, 스왑 체인, RTV 힙, 루트 서명, PSO를 `ChalkGraphics` 한 클래스에 내부 캡슐화한다.
+
+**선택 이유**:
+- 초기 단계에서 자원 간 결합이 강해 자원별 파일 분리는 과도한 추상화
+- 문서(ROADMAP/CODE_GUIDE)와 단일 클래스 명명 일치
+- 이후 PHASE 04에서 필요 시 자원별 파일로 분리 가능
+
+**거부된 대안**: 자원별 9개 클래스 즉시 분리 — 파일/문서 수 증가, 조기 설계 위험
+
+### 결정: 셰이더 런타임 컴파일 (d3dcompiler.lib)
+**날짜**: 2026-10-18
+
+**선택된 내용**: `shaders/*.hlsl`을 실행 시 `D3DCompile()`로 컴파일한다.
+
+**선택 이유**: 별도 빌드 스텝 없이 셰이더 수정 즉시 반영, 학습에 유리
+
+**거부된 대안**: 사전 컴파일(.cso) + 빌드 스텝 — 초기 단계에 불필요한 빌드 복잡성
+
+### 결정: UNICODE + Per-Monitor V2 DPI 적용 (기존 ANSI 코드 전환)
+**날짜**: 2026-10-18
+
+**선택된 내용**: PHASE 03에서 `CreateWindowExW`, 와이드 문자열, `SetProcessDpiAwarenessContext(PER_MONITOR_AWARE_V2)`를 적용한다.
+
+**선택 이유**: 고해상도 디스플레이 대응, 향후 UI 단계 대비. 기존 PHASE 02의 ANSI 코드를 조기에 전환
+
+**영향**: `src/ChalkApp.cpp` 리팩터링 필요 (PHASE 03 범위)
+
+### 결정: D3D12 디버그 레이어 전처리기 정의 및 /utf-8 컴파일 옵션
+**날짜**: 2026-10-18
+
+**선택된 내용**: Debug 구성에 `CHALK_DEBUG_LAYER` 전처리기를 generator expression(`$<$<CONFIG:Debug>:CHALK_DEBUG_LAYER>`)으로 정의하고, MSVC 컴파일러에 `/utf-8`을 적용한다. Release에는 디버그 레이어 정의를 넣지 않는다. `CMakeLists.txt`에서 `d3d12`/`dxgi`/`d3dcompiler`를 링크한다.
+
+**선택 이유**:
+- `_DEBUG` 대신 명시적 매크로로 릴리스/디버그 제어를 컴파일러 독립적으로 분리
+- `/utf-8`로 소스/실행 문자 집합 모호성 제거
+- Debug 전용 정의로 릴리스 성능·바이너리 영향 없음
+
+**거부된 대안**: `_DEBUG` 매크로 의존 — 컴파일러·표준 라이브러리 구현에 따라 정의 시점이 달라 명시적 제어 불가
+
+**영향**: 디버그 레이어 활성화 코드는 Step F의 `ChalkGraphics`에서 `CHALK_DEBUG_LAYER`로 게이트한다.
+
+### 정책: CMake 생성물(build/) Git 추적 해제
+**날짜**: 2026-10-18
+
+**내용**: `build/`는 생성 산출물이므로 추적에서 제외하고 `.gitignore`에 추가한다. (PHASE 03 착수 시 수행)
+
+---
+
 ## 주요 결정 사항 요약
 
 | 카테고리 | 결정 | 타당성 |
 |----------|------|--------|
 | 빌드 시스템 | CMake + VS 2022 제너레이터 | 유연성, 현대 표준, 미래지향 |
 | 기능 수준 | 12_0 최소, 11_0 폴백 | 광범위 호환성, 핵심 D3D12 기능 |
+| D3D12 구조 | ChalkGraphics 단일 클래스 | 통합 관리, 과도한 추상화 회피 |
+| 셰이더 | 런타임 컴파일 (d3dcompiler) | 즉시 반영, 빌드 단순 |
+| 문자/DPI | UNICODE + Per-Monitor V2 | 고해상도 대응, 선제 전환 |
 | 렌더링 | 기하학 기반 튜브 | 3D 폭 지각, 적절한 깊이 |
 | 입력 | WM_MOUSEMOVE 샘플링 | 단순성, 그리기에 충분 |
 | 창 | 손수 만든 Win32 | 완전한 제어, 경량 |
@@ -279,6 +336,4 @@ DECISIONS.md - CHALKFORGE 기술 결정사항
 | Undo/Redo | 명령 패턴 | 세부 단위, 메모리 효율적 |
 | 좌표 | 우측 Y-up | DirectXMath 기본값, HLSL 일관성 |
 
-**다음 결정 지점**: PHASE 01 - CMakeLists.txt 최종 확인 및 빌드 검증; PHASE 03 - D3D12 초기화 패턴 확인; PHASE 08 - 렌더링 전략 선택 검증.
-
-**다음 결정 지점**: PHASE 01 - CMakeLists.txt 및 빌드 검증 finalize; PHASE 03 - D3D12 초기화 패턴 확인; PHASE 08 - 렌더링 전략 선택 검증.
+**다음 결정 지점**: PHASE 04 - 자원별 파일 분리 여부; PHASE 08 - 렌더링 전략 선택 검증.

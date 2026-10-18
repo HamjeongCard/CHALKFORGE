@@ -1,38 +1,47 @@
 CODE_GUIDE.md - CHALKFORGE 코드 가이드
 
 ## 엔트리 포인트
-### WinMain (Win32 애플리케이션 시작점)
-- **위치**: PHASE 01에 생성 (ChalkApp.cpp)
-- **역할**: 애플리케이션 시작점; 창 클래스 등록, 메시 펌프, D3D12 초기화, 메인 루프
-- **호출 순서**: 
-  1. 윈도우 클래스 등록 (WNDCLASS)
-  2. 창 생성 (CreateWindowEx) - "CHALKFORGE" 제목
-  3. 메시 펌프 진입 (GetMessage/DispatchMessage)
-  4. 각 반복: 메시 처리, 상태 업데이트, D3D12 프레임 렌더링
-  5. 정리: 펜싱 대기, 리소스 처리, 모듈 종료
+### wWinMain (Win32 애플리케이션 시작점)
+- **위치**: PHASE 03에서 UNICODE 엔트리 포인트로 전환 (src/ChalkApp.cpp)
+- **역할**: 애플리케이션 시작점; ChalkApplication 수명 주기 호출만 담당 (창 생성·메시 펌프는 ChalkApplication/ChalkWindow로 위임)
+- **호출 순서**:
+  1. `ChalkApplication` 인스턴스 생성
+  2. `Initialize(hInstance, nCmdShow)`: DPI 인식 설정, 창 생성, (PHASE 03 Step F부터) D3D12 초기화
+  3. `Run()`: 메시 펌프 진입
+  4. `Finalize()`: 자원 정리, 로거 종료
+  5. 프로세스 종료 코드 반환
 
 ## planned 아키텍처의 핵심 클래스
 ### ChalkApplication
-- **파일**: PHASE 01에 생성 예정
-- **담당**: 메인 애플리케이션 오케스트레이션, 메시 루프, 수명 주기 관리
-- **주요 메서드**: 
-  - `Initialize()`: 창 생성, D3D12 디바이스 생성, 리소스 설정
-  - `Run()`: 메인 메시 루프
-  - `Finalize()`: 정리, 펜싱 대기, 처리
-  - `OnResize()`: 스왑 체인과 리소스 크기 조정 처리
+- **파일**: PHASE 03에서 구현 (src/ChalkApp.h/.cpp)
+- **담당**: 메인 애플리케이션 오케스트레이션, 수명 주기 관리, 창/그래픽스 연결
+- **주요 메서드**:
+  - `Initialize(HINSTANCE, int)`: 로깅 초기화, DPI 인식 설정, 창 생성, (PHASE 03 Step F부터) D3D12 초기화
+  - `Run()`: 메시 펌프 실행
+  - `Finalize()`: 창 정리, 로거 종료
+  - `OnResize(int, int)`: 창 크기 변경 시 크기 저장 및 (PHASE 03 Step F부터) 스왑 체인/리소스 재조정
 
 ### ChalkGraphics
-- **파일**: PHASE 03에 생성 예정
-- **담당**: D3D12 디바이스, 명령 큐, 스왑 체인, 렌더 파이프라인 관리
+- **파일**: PHASE 03에 구현 (src/ChalkGraphics.h/.cpp)
+- **담당**: D3D12 자원 통합 관리 — 디바이스, 명령 큐, 명령 할당자/목록, 스왑 체인, RTV 힙, 루트 서명, PSO, 정점 버퍼, 펜스를 단일 클래스 내부에 캡슐화 (DECISIONS.md 참조)
+- **주요 메서드**:
+  - `Initialize(HWND, int, int)`: 디바이스/큐/스왑 체인/파이프라인/정점 버퍼 초기화. 실패 시 try/catch로 로그 후 자원 해제하고 false 반환
+  - `RenderFrame()`: 할당자/커맨드 리스트 리셋 → 백 버퍼 기록 → `ExecuteCommandLists()` → `Present(1,0)` → `MoveToNextFrame()`
+  - `OnResize(int, int)`: `WaitForGpu()` 후 스왑 체인 버퍼 재생성 및 RTV 재생성
+  - `WaitForGpu()`: 펜스 기반 GPU 동기화
+  - `Finalize()`: GPU 대기 후 자원 해제 (RTV → 스왑 체인 → 디바이스 순)
+- **내부 메서드**: `CreateDeviceAndQueue`/`CreateSwapChain`/`CreateDescriptorHeaps`/`CreateRenderTargets`/`CreateCommandObjects`/`CreateFence`/`CreatePipeline`/`CreateTriangleGeometry`/`PopulateCommandList`/`MoveToNextFrame`/`ReleaseResources`
+- **셰이더**: `shaders/TriangleVS.hlsl`·`TrianglePS.hlsl`을 실행 시 `D3DCompile`로 컴파일. CMake POST_BUILD가 exe 옆 `shaders\`로 복사
 
 ### ChalkWindow
-- **파일**: PHASE 02에 구현 완료 (ChalkApp.cpp 수정)
-- **담당**: Win32 창 생성 및 메시 처리 (ChalkApp.cpp내 WndProc 구현)
+- **파일**: PHASE 03에서 ChalkApp.cpp 내 WndProc에서 클래스로 분리 (src/ChalkWindow.h/.cpp)
+- **담당**: Win32 창 생성 및 메시 처리 (UNICODE, Per-Monitor V2 DPI)
 - **주요 메서드**:
-  - `Create(HINSTANCE, int, const char*)`: 창 생성 - ChalkApp.cpp 내 구현
-  - `ProcessMessages()`: GetMessage/DispatchMessage 펌프 - ChalkApp.cpp 내 구현
-  - `OnMessage(UINT, WPARAM, LPARAM)`: 메시 디스패치 - ChalkApp.cpp 내 구현
-  - `SetResizeCallback()`: 크기 조정 이벤트 등록 - 향후 PHASE 07~08 추가 예정
+  - `Create(HINSTANCE, int, LPCWSTR)`: 창 클래스 등록 및 창 생성 (`WNDCLASSEXW`/`CreateWindowExW`)
+  - `ProcessMessages(std::function<void()> onIdle)`: `PeekMessageW`/`DispatchMessageW` 루프. 메시가 없으면 `onIdle()`(렌더 프레임) 호출, `WM_QUIT` 시 종료 코드 반환
+  - `OnMessage(UINT, WPARAM, LPARAM)`: 메시 디스패치 (`WM_SIZE` → 크기 콜백, `WM_DESTROY` → 종료, `WM_PAINT` → 배경 채우기)
+  - `SetResizeCallback(std::function<void(int,int)>)`: 크기 조정 이벤트 등록
+  - `Handle()/Width()/Height()`: 창 핸들·클라이언트 크기 조회
 
 ### ChalkCamera
 - **파일**: PHASE 05에 생성 예정
@@ -74,12 +83,13 @@ CHALKFORGE/
 ├ CODE_GUIDE.md        # PHASE 00에 생성된 코드 구조 가이드
 ├ CMakeLists.txt       # PHASE 01에 생성된 빌드 시스템
 ├ src/
-│   ├── ChalkApp.h/.cpp          # PHASE 01 애플리케이션 진입
-│   ├── ChalkDevice.h/.cpp       # PHASE 03 D3D12 디바이스
-│   ├── ChalkCmdQueue.h/.cpp     # PHASE 03 명령 큐
-│   ├── ChalkCmdList.h/.cpp      # PHASE 03 명령 목록
-│   ├── ChalkRenderTarget.h/.cpp # PHASE 03 RTV/백 버퍼
-│   ├── ChalkMath.h/.cpp         # PHASE 05 수학 유틸리티
+│   ├── ChalkApp.h/.cpp          # PHASE 01/03 애플리케이션 진입 (ChalkApplication)
+│   ├── ChalkWindow.h/.cpp       # PHASE 03 창 관리 (PHASE 02 WndProc 분리)
+│   ├── ChalkLogger.h/.cpp       # PHASE 03 로깅
+│   ├── ChalkError.h/.cpp        # PHASE 03 오류 처리
+│   ├── ChalkConfig.h            # PHASE 03 구성 기본값
+│   ├── ChalkGraphics.h/.cpp     # PHASE 03 D3D12 통합 (디바이스/큐/스왑 체인/RTV/PSO)
+│   ├── ChalkMath.h              # PHASE 03 최소 / PHASE 05 확장 (수학 유틸리티)
 │   ├── ChalkCamera.h/.cpp       # PHASE 05 카메라
 │   ├── ChalkBoard.h/.cpp        # PHASE 06 3D 보드
 │   ├── ChalkStroke.h/.cpp       # PHASE 08 스트로크 데이터
@@ -90,6 +100,8 @@ CHALKFORGE/
 │   ├── ChalkSaveLoad.h/.cpp     # PHASE 12 저장/로드
 │   └── ...                     # 단계가 진행됨에 따라 추가 파일
 ├ shaders/
+│   ├── TriangleVS.hlsl    # PHASE 03 삼각형 버텍스 셰이더 (실행 시 컴파일)
+│   ├── TrianglePS.hlsl    # PHASE 03 삼각형 픽셀 셰이더 (실행 시 컴파일)
 │   ├── ChalkVS.hlsl       # PHASE 08+ 버텍스 셰이더
 │   ├── ChalkPS.hlsl       # PHASE 08+ 픽셀 셰이더
 │   ├── BoardVS.hlsl       # PHASE 06+ 보드 버텍스 셰이더
@@ -98,30 +110,32 @@ CHALKFORGE/
 ```
 
 ## 코드 위치 및 관계에 대한 빠른 참조
-### 초기화 흐름 (planned)
-1. `WinMain()` → `ChalkApplication::Initialize()`
-2. `ChalkApplication::Initialize()` → `ChalkWindow::Create()` (PHASE 02)
-3. `ChalkApplication::Initialize()` → `ChalkGraphics::InitializeDevice()` (PHASE 03)
-4. `ChalkGraphics::InitializeDevice()` → `CreateSwapChainForHwnd()` (PHASE 03)
-5. `ChalkGraphics::InitializeDevice()` → `CreateCommandQueue()` (PHASE 03)
-6. `ChalkGraphics::InitializeDevice()` → `CreateCommandAllocators()` (PHASE 03)
-7. `ChalkGraphics::InitializeDevice()` → `CreateDescriptorHeaps()` (PHASE 03/04)
-8. `ChalkGraphics::InitializeDevice()` → `CreateRootSignature()` (PHASE 04)
-9. `ChalkGraphics::InitializeDevice()` → `CreatePipelineState()` (PHASE 04)
-10. `ChalkApplication::Initialize()` → `ChalkScene::Initialize()` (PHASE 05)
-11. `ChalkScene::Initialize()` → `ChalkBoard::Initialize()` (PHASE 06)
-12. `ChalkApplication::Initialize()` → 스트로크/툴 초기화 (PHASE 08+)
+### 초기화 흐름 (PHASE 03 Step F 기준)
+1. `wWinMain()` → `ChalkApplication::Initialize()`
+2. `ChalkApplication::Initialize()` → `ChalkWindow::Create()` (PHASE 02/03)
+3. `ChalkApplication::Initialize()` → `ChalkGraphics::Initialize()` (PHASE 03)
+4. `ChalkGraphics::Initialize()` → `CreateDeviceAndQueue()` → `CreateDXGIFactory2`/`D3D12CreateDevice` (PHASE 03)
+5. `ChalkGraphics::Initialize()` → `CreateSwapChain()` → `CreateSwapChainForHwnd()` (PHASE 03)
+6. `ChalkGraphics::Initialize()` → `CreateDescriptorHeaps()` (PHASE 03)
+7. `ChalkGraphics::Initialize()` → `CreateRenderTargets()` (PHASE 03)
+8. `ChalkGraphics::Initialize()` → `CreateCommandObjects()` (PHASE 03)
+9. `ChalkGraphics::Initialize()` → `CreateFence()` (PHASE 03)
+10. `ChalkGraphics::Initialize()` → `CreatePipeline()` → 루트 서명 + `D3DCompile` + PSO (PHASE 03)
+11. `ChalkGraphics::Initialize()` → `CreateTriangleGeometry()` (PHASE 03)
+12. `ChalkApplication::Initialize()` → `ChalkScene::Initialize()` (PHASE 05)
+13. `ChalkScene::Initialize()` → `ChalkBoard::Initialize()` (PHASE 06)
+14. `ChalkApplication::Initialize()` → 스트로크/툴 초기화 (PHASE 08+)
 
-### 렌더링 흐름 (planned)
-1. 각 프레임: `ChalkApplication::Run()` 반복
-2. `ChalkGraphics::RenderFrame()` 
+### 렌더링 흐름 (PHASE 03 Step F 기준)
+1. 각 프레임: `ChalkApplication::Run()` → `ChalkWindow::ProcessMessages([&]{ graphics_->RenderFrame(); })`
+2. 메시가 없으면 `onIdle`로 `ChalkGraphics::RenderFrame()` 호출
 3. `ChalkGraphics::RenderFrame()` → `CommandAllocator::Reset()`
 4. `ChalkGraphics::RenderFrame()` → `CommandList::Reset(allocator, PSO)`
-5. `ChalkGraphics::RenderFrame()` → 리소스 바리어 (백 버퍼, 깊이 전환)
-6. `ChalkGraphics::RenderFrame()` → `Draw calls` (보드, 스트로크, UI)
-7. `ChalkGraphics::RenderFrame()` → `CommandList::Close()`
+5. `ChalkGraphics::PopulateCommandList()` → RTV 바리어(PRESENT→RT) → `OMSetRenderTargets` → `ClearRenderTargetView`
+6. `ChalkGraphics::PopulateCommandList()` → `SetGraphicsRootSignature`/`SetPipelineState`/`IASetVertexBuffers`/`DrawInstanced(3,1,0,0)`
+7. `ChalkGraphics::PopulateCommandList()` → RTV 바리어(RT→PRESENT) → `CommandList::Close()`
 8. `ChalkGraphics::RenderFrame()` → `CommandQueue::ExecuteCommandLists()`
-9. `ChalkGraphics::RenderFrame()` → `SwapChain::Present()`
+9. `ChalkGraphics::RenderFrame()` → `SwapChain::Present(1,0)` → `MoveToNextFrame()`
 
 ### 스트로크 렌더링 흐름 (planned, PHASE 08+)
 1. CPU: `std::vector<Stroke> strokes`가 모든 스트로크 데이터 보유
